@@ -1,0 +1,25 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Geospatial Analytics Lab"
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "Isochrones"
+        href: isochrones.qmd
+      - text: "Population Density"
+        href: population-density.qmd
+    right:
+      - icon: github
+        href: "https://github.com/edgar-daniel-codes/geospatial-analytics-lab"
+
+format:
+  html:
+    theme: darkly
+    toc: true
+    toc-location: left
+    code-fold: true
+    number-sections: false

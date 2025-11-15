@@ -1,0 +1,32 @@
+---
+title: "Geospatial Analytics Lab"
+---
+
+# Geospatial Analytics Lab 
+
+Welcome to my digital geospatial research lab. My personal geospatial and geostatistical analytics lab, the idea is to use open source data, public sources and standard mapping tools and apply machine learning algorithms and analytics to uncover new information from human activity, nature and market dynamics around the globe. 
+
+Here I explore:
+
+- Travel-time **isochrones** over street networks.
+- **Population density** and accessibility analysis.
+
+
+## Projects
+
+[COMPLETE]
+
+- [Isochrone Calculator](isochrones.qmd)  
+  Compute travel-time catchment areas from an origin over a street network.
+
+- [Population Density Analysis](population-density.qmd)  
+  Build fine-grained density surfaces and visualizations for urban areas.
+
+## Theory Notes
+
+Some background notes that support the projects:
+
+---
+
+To learn more about my broader work visit my [main site](https://eddnprofessional.netlify.app/). 
+
