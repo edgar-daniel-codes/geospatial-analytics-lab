@@ -1,0 +1,129 @@
+---
+title: "Isochrones Experiment"
+author: "Edgar Daniel"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question: How far can I travel from home on my bike?
+
+Consider the following scenario: you are a young office worker living in the south-central area of Mexico City. Every day, you drive your car to and from the office during peak traffic hours. Mobility apps are too expensive, and you see lots of people happily cycling past while you wait for the traffic lights to turn green.
+
+But before you go online and buy your own bike, you need to define the following problem: you want to write a code to simulate how far you can actually travel. You are only willing to change your mode of transport if important places are within a 30-minute radius of your home; otherwise, you will continue to drive.
+
+So, the problem you want to solve is: From my starting point (home), how long does it take to travel 30 minutes by bicycle? 
+
+```{r, ECHO = FALSE, WARNINGS=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths to project root
+RAW_DATA <- here("data", "raw", "marco_geo_2020")
+CODE <- here("lib")
+
+source(paste0(CODE, "/isochrone.R"))
+
+# Parametros 
+SHP_DIRECTORY <- "/09_ciudaddemexico/conjunto_de_datos/"
+SHP_FILE_C <- "09e.shp"
+CRS_MX <- 32614
+```
+
+
+**Problem Statement**:
+
+Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
+
+
+## Data Preparation 
+
+The following approach was used to prepare the data: Using INEGI's 2020 Geostatistical Framework, the Mexico City street file was filtered by the relevant municipality. Based on this filter, an auto-intersection was applied to obtain the corners corresponding to the municipality's roads. 
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+# Lines and streets from the point of interest
+shp_streets <- st_read(paste0(RAW_DATA, SHP_DIRECTORY,SHP_FILE_C)) |>
+  filter(CVE_MUN == '014') |> 
+  st_transform(crs = CRS_MX)
+
+# We get the corners from LINESTRING 
+corners_sf <- st_intersection(shp_streets) |>
+  filter(st_geometry_type(geometry) == "POINT") |>
+  select(origins, geometry)
+corners_sf <- corners_sf[!duplicated(st_as_binary(corners_sf$geometry)), ] |>
+  mutate(id_node = row_number())
+
+```
+
+
+## The algorithm
+
+The algorithm used is based on a DFS (Deep First Search), i.e., starting from the corner of origin, the algorithm explores all possible trajectories from that point iteratively. As we seek to find all possible routes within a time budget, we move forward even if we cannot complete the route to the other corner. As long as there is time to travel the routes from a node, progress is made, even if it is not possible to complete the route to the other corner. 
+
+Once all possible routes have been found, the geometric objects representing each trajectory are reconstructed and joined together in the same polygon. From this, a convex polygon operation is performed to obtain the coverage area with these routes and, finally, all possible routes within the coverage area are “restored” as possible routes, returning the SF objects in geodetic coordinates (lat, lon). 
+
+## Simulation assumptions
+
+In addition to the walking speed assumptions for people, waiting and 'traffic' parameters have been implemented in the algorithm to make the simulation more realistic.
+
+We assume that each walkable path is also a path permitted for bikes. 
+
+We also assume two-way streets for both walking and biking. 
+
+As we can see, even when we walk, particularly in an urban area, we find ourselves having to wait for the light to change, and even on pedestrian-only streets, the crossing paths of other people means that we have to consider these waiting times, with two parameters. On the one hand, there is the probability of being caught at a red light, and on the other, there is the waiting time in seconds to wait for the light to change. This generates more realistic data. 
+
+```{r}
+### Execution  -----------------------------------------------------------------
+
+# Starting Point 
+# https://maps.app.goo.gl/p2SqWT23DZ66zDmX6
+lat <- 19.398085101174537
+lon <- -99.1560335457441
+
+# Maximum duration of trajectories in seconds 
+T_segs <- 10*60 
+
+VEL_MPS <- 1.4 # Average velocity in metter per second
+
+TWT_IND <- TRUE # Indicator if there are waiting times 
+TRAFFIC_WT <- 80 # Witing time in seconds 
+TWT_PROB <- 0.1 # Probability of waiting, wait for green lights
+
+POINT_TOLERANCE_M <- 150 # tolerance to find corner from point (mts)
+ADJ_TOLERANCE_M <- 3 # node-edge adjacency tolerance (mts)
+ADJE_TOLERANCE_M <- 3 # tolerance for edge-vertex adjacency (mts) 
+
+DISPLAY <- TRUE # Display map
+ECHO <- FALSE # Print simulation status 
+```
+
+## Execution
+
+We then execute the algorithm, printing the map for the given point and travel times:
+
+```{r, WARNING= FALSE}
+isoc <- calculate_isochrone(lat,lon,T_segs,shp_streets,corners_sf
+                         , VEL_MPS
+                         , TWT_IND, TRAFFIC_WT,TWT_PROB
+                         , POINT_TOLERANCE_M, ADJ_TOLERANCE_M, ADJE_TOLERANCE_M
+                         , DISPLAY
+                         , ECHO
+                         , CRS_MX)
+
+print(isoc$mapa)
+
+```
+
+
+Note how the map layer shows us the arrival of users who start from a corner and walk around the area of interest in the city hall for 5 minutes. 
+

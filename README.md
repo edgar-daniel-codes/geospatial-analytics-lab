@@ -1,18 +1,16 @@
 # Geospatial Analytics Lab 
 
-The present repository is my personal geospatial and geostatistical analytics lab, the idea is to use open source data, public sources and standard mapping tools and apply machine learning algorithms and analytics to uncover new information from human activity, nature and market dynamics around the globe, while learning the complex spatial data management and improving machine learning coding and design. 
+The current repository is my personal geospatial and geostatistical analytics laboratory. The idea is to use open-source data and public sources, as well as standard mapping tools, to apply machine learning algorithms and analytics. This will allow us to uncover new information about human activity, natural phenomena, and market dynamics around the world. At the same time, we will learn about complex spatial data management and improve our machine learning coding and design skills.
 
-The documentation site ("digital book") is built with Quarto and
-published via GitHub Pages.
 
  **Documentation:** 
 `https://edgar-daniel-codes.github.io/geospatial-analytics-lab/`
 
-The most important functions and/or algorithms could be duplicated both in global `lib` directory and the project `<project-name>/src`, this in order to make each project self-contain while reusing the geenrated code in each project. 
+The most important functions and/or algorithms could be duplicated in both the global `lib` directory and the project `<project-name>/src`, directory. This would make each project self-contained while enabling the reuse of generated code. 
 
-## Relvant projects
+## Relevant projects
 
-Some of the most useful and insighfult (completetly personal biased) projects inside the repo:
+Some of the most useful and insightful (completely personal and biased) projects in the repository are listed below.
 
 ### Isochrone Calculation 
 

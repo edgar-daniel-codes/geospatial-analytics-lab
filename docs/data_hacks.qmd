@@ -1,0 +1,220 @@
+---
+title: "Data Hacks"
+---
+
+On this page, I provide a series of APIs, web links and code snippets that I have used for my geospatial analysis to obtain data from public sources, government institutions, data science repositories and open-source mapping tools.
+
+# Maps and ubran polygons 
+
+In this section, we take a closer look at the data sources for polygonal shapes in urban and rural environments, buildings, political divisions, human structures, and general human-made infrastructure.
+
+## Mexico and LatAm 
+
+### INEGI
+
+The Instituto Nacional de Estadística y Geografía (INEGI), It is a Mexican public organisation that provides data for research and policy-making in terms of geographical and population characteristics. It also provides periodic results from different population and economic censuses and nationwide surveys. 
+
+**Marco Geoestadístico**
+
+The MG (Geostatistical Framework) is a product that integrates vector information, attribute tables and catalogues. It illustrates the geostatistical division of the national territory into successive levels of disaggregation.([INEGI](https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=889463807469)). 
+
+To get the 2020 MG version , we can run the following command in the root repository:
+
+```bash
+# Download zip (3.2 Gb)
+wget "https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/geografia/marcogeo/889463807469/889463807469_s.zip" -O ./data/raw/marcogeo_2020.zip
+
+# Unzip files
+unzip -o ./data/raw/marcogeo_2020.zip -d ./data/raw/marco_geo_2020
+
+rm ./data/raw/marcogeo_2020.zip
+
+# Loop for unzip entity level data 
+for z in ./data/raw/marco_geo_2020/*.zip; do
+  [ -e "$z" ] || continue   
+  # Create the directory
+  dir="${z%.zip}"           
+  mkdir -p "$dir"
+  # Unzip and remove 
+  unzip -o "$z" -d "$dir"
+  rm -f "$z"
+done
+
+```
+
+
+Using r: 
+
+```r
+# Parameters 
+URL <- "https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/geografia/marcogeo/889463807469/889463807469_s.zip"
+ZIP_MAIN <- "./data/raw/marcogeo_2020.zip"
+OUT_MAIN <- "./data/raw/marco_geo_2020"
+
+# ZIP download  (3.2 GB)
+if (!dir.exists(dirname(ZIP_MAIN))) dir.create(dirname(ZIP_MAIN), recursive = TRUE)
+download.file(url, destfile = ZIP_MAIN, mode = "wb")
+
+# Unzip file
+unzip(ZIP_MAIN, exdir = OUT_MAIN, overwrite = TRUE)
+
+# Delete ZIP
+file.remove(ZIP_MAIN)
+
+# Unzip entity level ZIP files 
+zip_files <- list.files(OUT_MAIN, pattern = "\\.zip$", full.names = TRUE)
+
+for (z in zip_files) {
+  dir_out <- sub("\\.zip$", "", z)
+  dir.create(dir_out, showWarnings=FALSE, recursive=TRUE)
+  unzip(z, exdir=dir_out, overwrite=TRUE)
+  file.remove(z)
+}
+```
+
+Python Version:
+
+```python
+
+# Required libraries 
+import os
+import zipfile
+import urllib.request
+import glob
+import shutil
+
+# Parameters 
+URL = "https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/geografia/marcogeo/889463807469/889463807469_s.zip"
+ZIP_MAIN = "./data/raw/marcogeo_2020.zip"
+OUT_MAIN = "./data/raw/marco_geo_2020"
+
+# ZIP download  (3.2 GB)
+os.makedirs(os.path.dirname(ZIP_MAIN), exist_ok=True)
+print(f"Downloading {URL} → {ZIP_MAIN}")
+urllib.request.urlretrieve(URL, ZIP_MAIN)
+
+# Unzip file
+print(f"Unzipping {ZIP_MAIN} → {OUT_MAIN}")
+os.makedirs(OUT_MAIN, exist_ok=True)
+with zipfile.ZipFile(ZIP_MAIN, "r") as z:
+    z.extractall(OUT_MAIN)
+
+# Delete main ZIP
+os.remove(ZIP_MAIN)
+
+# Unzip entity level ZIPs 
+for zpath in glob.glob(os.path.join(OUT_MAIN, "*.zip")):
+    target_dir = os.path.splitext(zpath)[0]
+    os.makedirs(target_dir, exist_ok=True)
+    try:
+        with zipfile.ZipFile(zpath, "r") as z:
+            z.extractall(target_dir)
+    except Exception as e:
+        print(f"Error extracting {zpath}: {e}")
+    os.remove(zpath)
+```
+
+
+**Censo de Población y Vivienda 2020**
+
+This is one of the most comprehensive data source for finding socio-demographic and economical data from mexican population. 
+
+Here are varios ways to automate results downloading from R, python or command line:
+
+In r: 
+
+```r
+# Parameters 
+OUT_DIR <- './data/raw/mex_censo_2020/'
+
+# Create the out directory 
+dir.create(OUT_DIR)
+
+# Create the custom PATHS for entity level census data
+paths <- sprintf("https://www.inegi.org.mx/contenidos/programas/ccpv/2020/microdatos/ageb_manzana/RESAGEBURB_%02s_2020_csv.zip"
+                 , 1:32)
+
+# Download entity zip files
+for(p in paths){
+  filename <- gsub("https://www.inegi.org.mx/contenidos/programas/ccpv/2020/microdatos/ageb_manzana/","",p)
+  download.file(url = p, 
+                destfile = paste0(OUT_DIR,filename),
+                mode = "wb",
+                quiet = FALSE)
+}
+
+# Unzip entity level files 
+for(f in list.files(OUT_DIR)){
+  dir_out <- gsub(".zip","",f)
+  dir.create(paste0(OUT_DIR, dir_out), showWarnings=FALSE, recursive=TRUE)
+  unzip(paste0(OUT_DIR, f), exdir=paste0(OUT_DIR, dir_out), overwrite=TRUE)
+  file.remove(paste0(OUT_DIR, f))
+}
+```
+
+Command Line version:
+
+```bash
+set -euo pipefail
+
+# Parameters
+OUT_DIR='./data/raw/mex_censo_2020/'
+
+# Create the out directory
+mkdir -p "$OUT_DIR"
+
+# Downloadn entity level ZIPs
+for i in {1..32}; do
+  printf -v num "%02d" "$i"
+  url="https://www.inegi.org.mx/contenidos/programas/ccpv/2020/microdatos/ageb_manzana/RESAGEBURB_${num}_2020_csv.zip"
+  filename="${url:t}"                      
+  dest="${OUT_DIR}${filename}"
+
+  echo "Downloading $url -> $dest"
+  curl -fL --retry 3 --retry-delay 2 -o "$dest" "$url"
+
+  dir_out="${OUT_DIR}${filename%.zip}"
+  mkdir -p "$dir_out"
+  unzip -o "$dest" -d "$dir_out"
+  rm -f "$dest"
+done
+```
+
+Python Version:
+
+```python
+
+# Required Libraries
+import os
+import urllib.request
+import zipfile
+
+# Parameters
+OUT_DIR = "./data/raw/mex_censo_2020/"
+
+# Create the out directory
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# Download entity level files 
+
+# Base name 
+base = "https://www.inegi.org.mx/contenidos/programas/ccpv/2020/microdatos/ageb_manzana/RESAGEBURB_{:02d}_2020_csv.zip"
+
+for i in range(1, 33):
+    url = base.format(i)
+    filename = url.rsplit("/", 1)[1]
+    dest = os.path.join(OUT_DIR, filename)
+
+    # Download file 
+    urllib.request.urlretrieve(url, dest)
+
+    # Extract ZIP files 
+    dir_out = os.path.join(OUT_DIR, filename[:-4]) 
+    os.makedirs(dir_out, exist_ok=True)
+    with zipfile.ZipFile(dest, "r") as z:
+        z.extractall(dir_out)
+
+    # Remove 
+    os.remove(dest)
+
+```

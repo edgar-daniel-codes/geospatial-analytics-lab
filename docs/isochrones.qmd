@@ -1,0 +1,42 @@
+---
+title: "Isochrones calculator"
+author: "Edgar Daniel"
+output: html_document
+---
+
+
+# Isochrones 
+
+In geo spacial analysis one of the biggest question of interst is to identify objects of interst taht are withing a reach of a point. Think on all cellphones that can be reached by an anthena, all medical centers around a certain point in the city, nearby competitor to a store or 
+
+
+
+# The Algorithm 
+
+The algorithm used is based on a DFS (Deep First Search), i.e., starting from the corner of origin, the algorithm explores all possible trajectories from that point iteratively. As we seek to find all possible routes within a time budget, we move forward even if we cannot complete the route to the other corner. As long as there is time to travel the routes from a node, progress is made, even if it is not possible to complete the route to the other corner. 
+
+Once all possible routes have been found, the geometric objects representing each trajectory are reconstructed and joined together in the same polygon. From this, a convex polygon operation is performed to obtain the coverage area with these routes and, finally, all possible routes within the coverage area are “restored” as possible routes, returning the SF objects in geodetic coordinates (lat, lon). 
+
+
+## Simulation assumptions
+
+In addition to the walking speed assumptions for people, in order to perform a more realistic simulation, waiting and “traffic” parameters are implemented in the algorithm. In other words, let's consider the following scheme:
+
+![Diagrama de crice de calles](./images/crossroads.png)
+
+
+We assume that each walkable path is also a path permitted for bikes. 
+
+We also assume two-way streets for both walking and biking. 
+
+As we can see, even when we walk, particularly in an urban area, we find ourselves having to wait for the light to change, and even on pedestrian-only streets, the crossing paths of other people means that we have to consider these waiting times, with two parameters. On the one hand, there is the probability of being caught at a red light, and on the other, there is the waiting time in seconds to wait for the light to change. This generates more realistic data. 
+
+
+# Experiments 
+
+
+
+
+
+
+

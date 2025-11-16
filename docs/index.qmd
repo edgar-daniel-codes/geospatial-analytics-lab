@@ -4,7 +4,7 @@ title: "Geospatial Analytics Lab"
 
 # Geospatial Analytics Lab 
 
-Welcome to my digital geospatial research lab. My personal geospatial and geostatistical analytics lab, the idea is to use open source data, public sources and standard mapping tools and apply machine learning algorithms and analytics to uncover new information from human activity, nature and market dynamics around the globe. 
+Welcome to my Digital Geospatial Research Lab! The idea behind my personal geospatial and geostatistical analytics lab is to use open-source data and standard mapping tools, as well as applying machine learning algorithms and analytics, to uncover new information about human activity, nature and market dynamics around the globe.
 
 Here I explore:
 
@@ -25,6 +25,8 @@ Here I explore:
 ## Theory Notes
 
 Some background notes that support the projects:
+
+In the [Data Hacks](data_hacks.qmd) page, we can review some useful scripts and links into public repositories and open data sources related with geo spatial data. 
 
 ---
 

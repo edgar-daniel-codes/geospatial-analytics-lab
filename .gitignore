@@ -41,6 +41,7 @@ venv/
 .Rproj.user/
 .RData
 .Ruserdata
+*.Rproj
 
 # Node 
 node_modules/
