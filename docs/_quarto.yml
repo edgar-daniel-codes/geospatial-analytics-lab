@@ -2,6 +2,7 @@ project:
   type: website
   output-dir: _site
 
+
 website:
   title: "Geospatial Analytics Lab"
   navbar:

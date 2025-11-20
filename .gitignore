@@ -223,7 +223,7 @@ docker-compose.override.yml
 
 # Quarto builds
 !./docs/
-docs/_site/*
+!docs/_site/*
 docs/*.log
 docs/*.tmp
 
