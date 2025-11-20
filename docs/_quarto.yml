@@ -10,8 +10,8 @@ website:
         href: index.qmd
       - text: "Isochrones"
         href: isochrones.qmd
-      - text: "Population Density"
-        href: population-density.qmd
+      - text: "Population Density - Mexican Urban Areas"
+        href: mexico-population-density.qmd
     right:
       - icon: github
         href: "https://github.com/edgar-daniel-codes/geospatial-analytics-lab"

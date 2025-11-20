@@ -21,17 +21,29 @@ An analysis of how the population is distributed across urban communities in Mex
 ## Structure
 
 ├── `data` - Folder with all data inputs and outputs.
+
 │   ├── `clean` - Cleaned databases. 
+
 │   ├── `inference` - Data generated as a result of a statistical model or algorithm. 
+
 │   ├── `processed` - Processed data, data engineered variables.
+
 │   ├── `raw` - original data sources. 
+
 │   └── `sample` - Data samples for making the public repo functions work and showcase. 
+
 ├── `docs` — Quarto website (the main "book" for this lab).
+
 ├── `examples` - Code extracts and figures for very particular examples.
+
 ├── `lib` — Source code for all individual projects in the same folder. 
+
 ├── `projects` — Individual projects (isochrones, population density, etc.).
+
 ├── `README.md` — README file for the whole project.
+
 ├── `requirements.txt` - All libraries and required dependencies.
+
 └── `tests` - Non concluded experiments, functions and notebooks.
 
 
