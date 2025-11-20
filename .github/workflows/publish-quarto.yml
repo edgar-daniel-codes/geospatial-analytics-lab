@@ -1,5 +1,8 @@
 name: Publish Quarto Site
 
+env:
+  ACTIONS_STEP_DEBUG: true
+
 on:
   push:
     branches: [ main ]
@@ -20,6 +23,7 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "latest"
+        continue-on-error: false
 
       - name: Publish to GitHub Pages
         uses: quarto-dev/quarto-actions/publish@v2
@@ -36,3 +40,4 @@ jobs:
           ls -la docs
           echo "--- built tree ---"
           ls -la docs/_site || true
+

@@ -126,14 +126,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link" href="./index.html"> 
 <span class="menu-text">Home</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./isochrones.html"> 
-<span class="menu-text">Isochrones</span></a>
-  </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./population-density.qmd"> 
-<span class="menu-text">Population Density</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item compact">
@@ -156,7 +148,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#maps-and-ubran-polygons" id="toc-maps-and-ubran-polygons" class="nav-link active" data-scroll-target="#maps-and-ubran-polygons">Maps and ubran polygons</a>
+  <li><a href="#maps-and-urban-polygons" id="toc-maps-and-urban-polygons" class="nav-link active" data-scroll-target="#maps-and-urban-polygons">Maps and urban polygons</a>
   <ul class="collapse">
   <li><a href="#mexico-and-latam" id="toc-mexico-and-latam" class="nav-link" data-scroll-target="#mexico-and-latam">Mexico and LatAm</a>
   <ul class="collapse">
@@ -198,17 +190,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>On this page, I provide a series of APIs, web links and code snippets that I have used for my geospatial analysis to obtain data from public sources, government institutions, data science repositories and open-source mapping tools.</p>
-<section id="maps-and-ubran-polygons" class="level1">
-<h1>Maps and ubran polygons</h1>
-<p>In this section, we take a closer look at the data sources for polygonal shapes in urban and rural environments, buildings, political divisions, human structures, and general human-made infrastructure.</p>
+<p>This page provides a series of APIs, web links and code snippets that I have used for geospatial analysis, enabling the retrieval of data from public sources, government institutions, data science repositories and open-source mapping tools.</p>
+<section id="maps-and-urban-polygons" class="level1">
+<h1>Maps and urban polygons</h1>
+<p>In this section, we examine the data sources for polygonal shapes in urban and rural environments, including buildings, political divisions and other human-made structures and infrastructure.</p>
 <section id="mexico-and-latam" class="level2">
 <h2 class="anchored" data-anchor-id="mexico-and-latam">Mexico and LatAm</h2>
 <section id="inegi" class="level3">
 <h3 class="anchored" data-anchor-id="inegi">INEGI</h3>
-<p>The Instituto Nacional de Estadística y Geografía (INEGI), It is a Mexican public organisation that provides data for research and policy-making in terms of geographical and population characteristics. It also provides periodic results from different population and economic censuses and nationwide surveys.</p>
+<p>The Instituto Nacional de Estadística y Geografía (INEGI) is a Mexican public organisation that provides geographical and population data for research and policy-making. INEGI also provides periodic results from various population and economic censuses and nationwide surveys.</p>
 <p><strong>Marco Geoestadístico</strong></p>
-<p>The MG (Geostatistical Framework) is a product that integrates vector information, attribute tables and catalogues. It illustrates the geostatistical division of the national territory into successive levels of disaggregation.(<a href="https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=889463807469">INEGI</a>).</p>
+<p>The MG (Geostatistical Framework) is a product that combines vector information, attribute tables, and catalogues. It illustrates the division of the national territory into successive levels of geostatistical disaggregation. (<a href="https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=889463807469">INEGI</a>).</p>
 <p>To get the 2020 MG version , we can run the following command in the root repository:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Download zip (3.2 Gb)</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">wget</span> <span class="st">"https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/geografia/marcogeo/889463807469/889463807469_s.zip"</span> <span class="at">-O</span> ./data/raw/marcogeo_2020.zip</span>
