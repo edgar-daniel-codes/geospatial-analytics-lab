@@ -1,0 +1,55 @@
+---
+title: "Population Density: 15 minutes reach"
+author: "Edgar Daniel"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question: How far can I travel from home on my bike?
+
+Consider the following scenario: you are a young office worker living in the south-central area of Mexico City. Every day, you drive your car to and from the office during peak traffic hours. Mobility apps are too expensive, and you see lots of people happily cycling past while you wait for the traffic lights to turn green.
+
+
+```{r, ECHO = FALSE, WARNINGS=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths to project root
+RAW_DATA <- here("data", "raw", "marco_geo_2020")
+SAMPLE_DATA <- here("data", "sample")
+CODE <- here("lib")
+
+source(paste0(CODE, "/isochrone.R"))
+
+# Parametros 
+
+```
+
+
+**Problem Statement**:
+
+Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
+
+
+## Data Preparation 
+
+The following approach was used to prepare the data: Using INEGI's 2020 Geostatistical Framework, the Mexico City street file was filtered by the relevant municipality. Based on this filter, an auto-intersection was applied to obtain the corners corresponding to the municipality's roads. 
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+
+```
+
+
+
