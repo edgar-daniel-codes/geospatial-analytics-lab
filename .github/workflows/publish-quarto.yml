@@ -1,14 +1,15 @@
 name: Publish Quarto Site
 
-env:
-  ACTIONS_STEP_DEBUG: true
-
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: write  
+  contents: write
+
+env:
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build-deploy:
@@ -23,21 +24,40 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "latest"
-        continue-on-error: false
+
+      - name: Check Quarto install
+        id: check_quarto
+        run: |
+          if command -v quarto >/dev/null 2>&1; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "Quarto version:"
+            quarto --version
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "Quarto not found after setup action."
+          fi
+
+      - name: Manual install Quarto (fallback)
+        if: steps.check_quarto.outputs.found != 'true'
+        run: |
+          set -eux
+          curl -fsSL -o quarto-linux-amd64.deb \
+            https://github.com/quarto-dev/quarto-cli/releases/latest/download/quarto-linux-amd64.deb
+          sudo dpkg -i quarto-linux-amd64.deb || (sudo apt-get -f install -y && sudo dpkg -i quarto-linux-amd64.deb)
+          quarto --version
 
       - name: Publish to GitHub Pages
         uses: quarto-dev/quarto-actions/publish@v2
         with:
           target: gh-pages
-          path: docs              
+          path: docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Quarto version & outputs
+      # Diagnostics 
+      - name: List built files
         run: |
-          which quarto && quarto --version
           echo "--- docs tree ---"
-          ls -la docs
+          ls -la docs || true
           echo "--- built tree ---"
           ls -la docs/_site || true
-
