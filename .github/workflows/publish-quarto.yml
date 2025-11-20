@@ -4,27 +4,28 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write  
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
+          
           version: "latest"
 
-      - name: Render Quarto site
-        run: |
-          cd docs
-          quarto render
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Publish to GitHub Pages
+        uses: quarto-dev/quarto-actions/publish@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_site
-          publish_branch: gh-pages
+          target: gh-pages
+          path: docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

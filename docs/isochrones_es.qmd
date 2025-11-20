@@ -66,7 +66,7 @@ A partir de esto se identifican los primeros subcaminos.
 
 Si aislamos este subproceso y lo vemos como un paso en particular, una vez que identificamos el punto de interés (anteriormente, el punto de partida) y sus correspondientes adjacencias, podemos comenzar a construir una serie de caminos a nuestro alcance. En el siguiente diagrama podemos ver cómo la subred se puede considerar entonces como un árbol del que podemos explorar las diferentes opciones, actualizando en cada decisión el presupuesto de tiempo y la lista de nodos recorridos hasta el momento. 
 
-![Diagrama de paso en el algoritmo](./images/iso_adj_sp.png)
+![Diagrama de paso en el algoritmo](./images/iso_streets_to_tree.png)
 
 Si excluimos las esquinas y calles ya recorridas (no queremos ciclos en nuestros caminos), podemos repetir este paso de manera iterativa siempre que tengamos tiempo disponible, agregando así los nodos consecutivos y generando una serie de caminos cuyo nodo de origen es el punto de partida. 
 
@@ -164,5 +164,32 @@ ECHO <- FALSE # Print simulation status
 ## Ejecución
 
 Ejecutamos las simulación con las parámetros definidos, obteniendo los siguientes resultados:
+
+```r
+isoc <- calculate_isochrone(lat,lon,T_segs,shp_streets,corners_sf
+                         , VEL_MPS
+                         , TWT_IND, TRAFFIC_WT,TWT_PROB
+                         , POINT_TOLERANCE_M, ADJ_TOLERANCE_M, ADJE_TOLERANCE_M
+                         , DISPLAY
+                         , ECHO
+                         , CRS_MX)
+
+print(isoc$mapa)
+
+st_write(isoc$paths_isochrone,paste0("./data/sample/", "/iso_paths.geojson")
+         ,layer = "iso_paths.geojson" )
+
+st_write(isoc$hull_isochrone,paste0("./data/sample/", "/iso_hull.geojson")
+         ,layer = "iso_hull.geojson" )
+
+```
+
+![Mapa Resultante](./images/iso_final_map.png)
+
+En el mapa anterior podemos ver en color gris claro, las calles de interés (restricción de movimiento) correspondientes a las Alcaldías Miguel Hidalgo, Benito Juárez y Coyoacán. En negro son los caminos alcanzables contenidos en la isócrona, y en color azul la isócrona en sí. El punto de partida esta en color verde y se tienen como objetivo alcanzar el punto azul (oficina). 
+
+![Puntos de origen y destino](./images/iso_se_points.png)
+
+Como observamos en la pasada imagen el punto azul esta dentro de nuestra isócrona, permitiendonos concluir que en efecto, podemos realizar nuestro recorrido en al menos 30 min. bajo los supuestos de movilidad que se tomaron. 
 
 

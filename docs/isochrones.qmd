@@ -74,7 +74,7 @@ Here we have the first sub-paths.
 
 If we isolate this subprocess and view it as a particular step, once we identify the point of interest (previously, the starting point) and its corresponding adjacencies, we can begin to construct a series of paths within our reach. In the following diagram, we can see how the subnetwork can then be considered as a tree from which we can explore the different options, updating the time budget and the list of nodes traversed so far with each decision. 
 
-![Diagram of step in the algorithm](./images/iso_adj_sp.png)
+![Diagram of step in the algorithm](./images/iso_streets_to_tree.png)
 
 If we exclude corners and streets already traveled (we do not want cycles in our paths), we can repeat this step iteratively as long as we have time available, thus adding consecutive nodes and generating a series of paths whose origin node is the starting point. 
 
@@ -176,8 +176,30 @@ ECHO <- FALSE # Print simulation status
 
 Given the past parameters, we execute the simulation. Getting the following results:
 
+```r
+isoc <- calculate_isochrone(lat,lon,T_segs,shp_streets,corners_sf
+                         , VEL_MPS
+                         , TWT_IND, TRAFFIC_WT,TWT_PROB
+                         , POINT_TOLERANCE_M, ADJ_TOLERANCE_M, ADJE_TOLERANCE_M
+                         , DISPLAY
+                         , ECHO
+                         , CRS_MX)
 
+print(isoc$mapa)
 
+st_write(isoc$paths_isochrone,paste0("./data/sample/", "/iso_paths.geojson")
+         ,layer = "iso_paths.geojson" )
 
+st_write(isoc$hull_isochrone,paste0("./data/sample/", "/iso_hull.geojson")
+         ,layer = "iso_hull.geojson" )
 
+```
+
+![Resulting Map](./images/iso_final_map.png)
+
+In the map above, we can see in light gray the streets of interest (movement restriction) corresponding to the Miguel Hidalgo, Benito Juárez, and Coyoacán municipalities. In black are the reachable roads contained in the isochrone, and in blue is the isochrone itself. The starting point is in green, and the goal is to reach the blue point (office). 
+
+![Points of origin and destination](./images/iso_se_points.png)
+
+As we can see in the previous image, the blue point is within our isochrone, allowing us to conclude that we can indeed complete our journey in at least 30 minutes under the mobility assumptions that were made. 
 

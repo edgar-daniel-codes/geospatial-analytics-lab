@@ -26,6 +26,7 @@ opts_knit$set(root.dir = here::here())
 
 # Paths to project root
 RAW_DATA <- here("data", "raw", "marco_geo_2020")
+SAMPLE_DATA <- here("data", "sample")
 CODE <- here("lib")
 
 source(paste0(CODE, "/isochrone.R"))
@@ -126,4 +127,105 @@ print(isoc$mapa)
 
 
 Note how the map layer shows us the arrival of users who start from a corner and walk around the area of interest in the city hall for 5 minutes. 
+
+
+We save the results of this simultation:
+
+
+```{r, WARNING= FALSE}
+
+st_write(shp_streets,paste0(SAMPLE_DATA, "/iso_streets.geojson")
+         ,layer = "/iso_streets.geojson" )
+
+st_write(isoc$hull_isochrone,paste0(SAMPLE_DATA, "/iso_hull.geojson")
+         ,layer = "iso_hull.geojson" )
+
+st_write(isoc$hull_isochrone,paste0(SAMPLE_DATA, "/iso_hull.geojson")
+         ,layer = "iso_hull.geojson" )
+
+```
+```{r}
+
+
+library(knitr)
+library(dplyr)
+library(leaflet)
+
+paths_isochrone <- st_read(paste0(SAMPLE_DATA, "/iso_paths.geojson"))
+hull_isochrone <- st_read(paste0(SAMPLE_DATA, "/iso_hull.geojson"))
+original_edges <- st_read(paste0(SAMPLE_DATA, "/iso_streets.geojson"))
+
+# Starting Point 
+# https://maps.app.goo.gl/CnuKBE7yScWgANmp8
+lat <- 19.39798481495679
+lon <- -99.1615400498479
+
+# Office point  https://maps.app.goo.gl/RFbYe8deVWucErp76
+lat_o <- 19.42484883261405
+lon_o <- -99.1716529471139 
+
+home <- data.frame(lat = lat, lon = lon) |>
+      st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+office <- data.frame(lat = lat_o, lon = lon_o) |>
+      st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# Display Map 
+map <- leaflet()  |>
+      addProviderTiles(providers$CartoDB.Positron)  |> 
+      addPolylines(
+        data = original_edges |> st_transform(crs = 4326),
+        color = "lightgray", 
+        fillOpacity = 0.5, 
+        weight = 3, 
+        group="Zone of Interest"
+        
+      ) |> 
+      addPolygons(
+        data =  hull_isochrone ,
+        color = 'cornflowerblue', 
+        fillOpacity = 0.4, 
+        opacity = 0.4,
+        group= "Isochrone Area"
+        
+      ) |> 
+      addPolylines(
+        data =  paths_isochrone  ,
+        color = 'black', 
+        fillOpacity = 0.2,
+        opacity = 0.4,
+        weight = 2,
+        group= "Paths within Isochrone"
+      ) |> 
+      addCircleMarkers(
+        data =  home , 
+        radius = 3, 
+        color = 'darkgreen',
+        opacity = 0.5,
+        group= "Starting corner"
+      ) |> 
+      addCircleMarkers(
+        data =  office , 
+        radius = 3, 
+        color = 'darkblue',
+        opacity = 0.5,
+        group= "Office"
+      ) |>
+      addControl("<b>Isochrones in the area of interest.</b>", position = "topright") |>
+      addLayersControl(
+        overlayGroups = c(
+          "Zone of Interest",
+          "Isochrone Area", 
+          "Paths within Isochrone",
+          "Starting corner", 
+          "Office"
+        ),
+        options = layersControlOptions(collapsed = FALSE)
+      ) 
+
+print(map)
+
+```
+
+
 
