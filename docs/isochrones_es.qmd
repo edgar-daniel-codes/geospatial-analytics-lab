@@ -1,7 +1,7 @@
 ---
 title: "Isochrones calculator"
 author: "Edgar Daniel"
-output: html_document
+page-layout: article
 ---
 
 # Isócronas  

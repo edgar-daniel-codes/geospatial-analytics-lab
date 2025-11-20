@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write  
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
@@ -18,14 +19,20 @@ jobs:
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          
           version: "latest"
 
       - name: Publish to GitHub Pages
         uses: quarto-dev/quarto-actions/publish@v2
         with:
           target: gh-pages
-          path: docs
+          path: docs              
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Quarto version & outputs
+        run: |
+          which quarto && quarto --version
+          echo "--- docs tree ---"
+          ls -la docs
+          echo "--- built tree ---"
+          ls -la docs/_site || true
