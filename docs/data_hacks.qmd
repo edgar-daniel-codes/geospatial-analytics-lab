@@ -1,5 +1,7 @@
 ---
 title: "Data Hacks"
+author: "Edgar Daniel"
+output: html_document
 ---
 
 On this page, I provide a series of APIs, web links and code snippets that I have used for my geospatial analysis to obtain data from public sources, government institutions, data science repositories and open-source mapping tools.

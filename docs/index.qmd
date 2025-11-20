@@ -1,26 +1,20 @@
 ---
 title: "Geospatial Analytics Lab"
+author: "Edgar Daniel"
+output: html_document
 ---
 
 # Geospatial Analytics Lab 
 
 Welcome to my Digital Geospatial Research Lab! The idea behind my personal geospatial and geostatistical analytics lab is to use open-source data and standard mapping tools, as well as applying machine learning algorithms and analytics, to uncover new information about human activity, nature and market dynamics around the globe.
 
-Here I explore:
-
-- Travel-time **isochrones** over street networks.
-- **Population density** and accessibility analysis.
-
-
 ## Projects
-
-[COMPLETE]
 
 - [Isochrone Calculator](isochrones.qmd)  
   Compute travel-time catchment areas from an origin over a street network.
 
-- [Population Density Analysis](population-density.qmd)  
-  Build fine-grained density surfaces and visualizations for urban areas.
+- [Population Density Analysis](mexico-population-density.qmd)  
+  An analysis of how the population is distributed across urban communities in Mexico.
 
 ## Theory Notes
 

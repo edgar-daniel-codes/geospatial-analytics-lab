@@ -1,0 +1,168 @@
+---
+title: "Isochrones calculator"
+author: "Edgar Daniel"
+output: html_document
+---
+
+# Isócronas  
+
+En el análisis geoespacial, una de las cuestiones más importantes es identificar los objetos de interés que se encuentran dentro del alcance de un punto determinado. Piensa en todos los teléfonos móviles a los que llega una antena, en todos los centros médicos que hay alrededor de un punto de la ciudad y en todos los competidores cercanos a una tienda. Para la mayoría de estos problemas, la solución más inmediata consiste en definir el alcance desde un punto en términos de distancia. Normalmente se supone que es euclidiano, pero hay que tener cuidado porque en el análisis geoespacial trabajamos con proyecciones.
+
+Incluso ignorando las salvedades relativas a las distancias y las proyecciones, el problema radica en que el espacio que se analiza no es uniforme: la naturaleza presenta accidentes geográficos, las sociedades llevan a cabo proyectos de infraestructura que modifican la distribución de los espacios y las ciudades y los espacios habitacionales son irregulares. 
+
+A esto hay que añadir que, cuando realizamos ejercicios de alcance, una restricción es el tiempo. No es lo mismo decir que hay cinco centros de salud en un radio de cinco kilómetros que decir que se pueden alcanzar en menos de T minutos. Así pues, podemos definir la isocrona de la siguiente forma:
+
+> Def. Una isocrona $I(x,t,Tt,Ht) \in \mathbb{R}^2$, es el área o envolvente del 
+> conjunto de rutas que se pueden alcanzar desde el punto $x$ en menos de $t$ 
+> minutos (o cualquier unidad de medida del tiempo) para un tipo de transporte
+> $Tt$ en un horario definifo $Ht$ 
+
+Aunque, por lo general, debido al coste computacional o a la falta de información, se asumen condiciones $T_t$ y $H_t$ fijas, siempre se deben especificar los supuestos. 
+
+A continuación se muestra un ejemplo de radio de alcance para una isocrona de 15 minutos en coche en la Ciudad de México (promedio, API de OSM, ¡llegadas muy optimistas!).
+
+![Isócrona](./images/isocrhrone_example.png)
+
+Esta irregularidad es la que hace necesario tener en cuenta las isocronas en el estudio del alcance desde un punto fijo. 
+
+Las complejidades que surgen al lidiar con isocrónas son muchas, algunas de las cuales son:
+
+    - Fuerte dependencia de los vehículos de transporte. 
+    - El momento del día en que se realiza el trayecto. 
+    - Infraestructura y sensibilidad a eventos (accidentes). 
+    - Adaptabilidad de la ruta y eficiencia de los recorridos. 
+
+No obstante, su gran cantidad de aplicaciones e importancia en la industria y la investigación hacen que valga la pena encontrar algoritmos y procesos para estimar isocronas de forma más precisa. 
+
+# El Algoritmo
+
+En la práctica, y dependiendo de las condiciones y necesidades del problema (por ejemplo, exactitud en el cálculo, unicidad, evaluación de isocrónas por lotes o múltiples consultas en cortos periodos de tiempo), se puede hacer un trade-off entre la precisión del cálculo y la complejidad del algoritmo. En este caso, se pretende generar una intuición con un enfoque didáctico del problema del cálculo de isocrónas. En ejercicios posteriores, se revisan otros algoritmos más eficientes, como Dijkstra acotado o variantes de A*. 
+
+El algoritmo que se utiliza se basa en un DFS (Search First Depth), es decir, partiendo de la esquina de origen, el algoritmo explora iterativamente todas las trayectorias posibles desde ese punto. Como el objetivo es encontrar todas las rutas posibles en un tiempo determinado, avanzamos incluso si no podemos completar la ruta hasta la otra esquina. Siempre que haya tiempo para recorrer las rutas desde un nodo, se avanza, aunque no sea posible completarlas hasta la otra esquina.
+
+Una vez encontradas todas las rutas posibles, se reconstruyen los objetos geométricos que representan cada trayectoria y se unen en el mismo polígono. A continuación, se realiza una operación de polígono convexo para obtener el área de cobertura con estas rutas y, por último, se «restablecen» todas las rutas posibles dentro del área de cobertura como rutas posibles, devolviendo los objetos SF en coordenadas geodésicas (lat, lon). 
+
+A continuación, se ofrece una guía paso a paso más completa sobre cómo se desarrolló la calculadora de isócronas.
+
+### Inicialización
+
+**De calles a esquinas.** Como punto de partida, se toma un archivo SHP que contenga las líneas de las calles o vías que se consideran accesibles por nuestro medio de transporte (en este caso, pasos peatonales). A partir de este archivo, se obtienen las esquinas con la finalidad de generar una red cuyos nodos (esquinas) son los puntos hacia los que avanzamos y en los que las aristas son la conexión de esquinas a través de las calles. En este caso, el peso entre aristas es el tiempo en segundos que se requiere para pasar de un vértice a otro si están conectados. 
+
+![Calles y esquinas como nodos en una red](./images/corners_example.png)
+
+**Inicialización.** Como se tiene un punto de partida fijo, $x$, calcular todas las rutas es poco eficiente, pues la restricción de partida nos permite partir de ahí de manera iterativa. Identificamos, sin pérdida de generalidad, una de las esquinas que se tienen como punto de partida. 
+
+A partir de aquí, identificamos los puntos adyacentes al punto de partida junto con su coste de tiempo correspondiente, basado en el peso de las calles determinado por su longitud y la velocidad de movimiento promedio asignada al algoritmo. 
+
+![Selección de punto inicial](./images/iso_start_point.png)
+
+A partir del punto inicial, se utiliza la función st_buffer para determinar un círculo de radio 5 m que, por medio de la intersección con la estructura de las calles, identifique cuáles de estas son adyacentes al punto en sí. Esta operación se repite con los segmentos para determinar qué esquinas y vértices son adyacentes. 
+
+![Adjacencias al punto inicial](./images/iso_adj_sp.png)
+
+A partir de esto se identifican los primeros subcaminos. 
+
+### Búsqueda exhaustiva.
+
+Si aislamos este subproceso y lo vemos como un paso en particular, una vez que identificamos el punto de interés (anteriormente, el punto de partida) y sus correspondientes adjacencias, podemos comenzar a construir una serie de caminos a nuestro alcance. En el siguiente diagrama podemos ver cómo la subred se puede considerar entonces como un árbol del que podemos explorar las diferentes opciones, actualizando en cada decisión el presupuesto de tiempo y la lista de nodos recorridos hasta el momento. 
+
+![Diagrama de paso en el algoritmo](./images/iso_adj_sp.png)
+
+Si excluimos las esquinas y calles ya recorridas (no queremos ciclos en nuestros caminos), podemos repetir este paso de manera iterativa siempre que tengamos tiempo disponible, agregando así los nodos consecutivos y generando una serie de caminos cuyo nodo de origen es el punto de partida. 
+
+En el caso de que el siguiente nodo adyacente que se va a explorar requiera recorrer una calle cuyo tiempo necesario sea mayor que el presupuesto disponible, se decide avanzar sobre el nodo de manera fraccional hasta que se agote el tiempo disponible, creando así un nuevo nodo y aristas «sintéticos», y se finaliza la exploración. 
+
+De esta manera, se finaliza el bucle con una serie de caminos. A continuación, se muestra un ejemplo de los caminos generados a partir del punto de partida: 
+
+![Caminos generados por el bucle](./images/iso_all_paths.png)
+
+Finalmente, para la gran mayoría de las aplicaciones, se pretende obtener una cobertura, por lo que, a partir de estos caminos, se genera un polígono envolvente cóncavo con suavizado que permita cubrir los caminos y generar el polígono considerado como la isócrona buscada. 
+
+![área de cobertura (Isócrona propuesta)](./images/iso_area_cob.png)
+
+## Supuestos de Simulación
+
+Además de las suposiciones sobre la velocidad de marcha de las personas, con el fin de realizar una simulación más realista, el algoritmo incluye parámetros de espera y «tráfico». En otras palabras, veamos el siguiente esquema:
+
+![Diagrama de cruce de calles](./images/crossroads.png)
+
+Suponemos que si un camino es transitable a pie, también lo es para bicicletas. 
+
+Asimismo, suponemos que las calles son de doble sentido para peatones y bicicletas. 
+
+Como podemos ver, incluso cuando caminamos, especialmente en una zona urbana, nos vemos obligados a esperar a que cambie el semáforo. Incluso en las calles exclusivas para peatones, la presencia de otras personas nos obliga a tener en cuenta estos tiempos de espera. Por un lado, está la probabilidad de encontrarnos con un semáforo en rojo y, por otro, el tiempo de espera en segundos hasta que cambie. Esto genera datos más realistas. Hemos incluido esta lógica en cada uno de los nodos (esquinas).
+
+# Experimentos 
+
+> Pregunta: ¿A qué distancia de mi casa puedo llegar en bicicleta?
+
+Imagina que eres un joven oficinista que vive en la zona centro-sur de Ciudad de México. Todos los días vas y vuelves del trabajo en coche en hora punta. Las aplicaciones de movilidad son muy caras y ves a mucha gente en bicicleta mientras esperas a que se ponga en verde el semáforo.
+
+Antes de conectarte a internet y comprar una bicicleta, debes resolver el siguiente problema: quieres escribir un código para simular la distancia que realmente puedes recorrer. Solo cambiarás de medio de transporte si los lugares importantes se encuentran en un radio de 30 minutos desde tu casa; de lo contrario, seguirás conduciendo.
+
+Por lo tanto, el problema que quieres resolver es el siguiente: ¿cuánto tiempo se tarda en recorrer 30 minutos en bicicleta desde mi punto de partida (mi casa)? 
+
+**Planteamiento del problema**:
+
+> Dado un archivo shapefile de calles y un punto de partida, 
+> construir un algoritmo que calcule la isócrona 
+> en distancia a pie o en bicicleta para un tiempo y una velocidad media determinados. 
+
+
+## Preparación de los datos 
+
+Para preparar los datos se utilizó el siguiente enfoque: utilizando el Marco Geoestadístico 2020 del INEGI, se filtró el archivo de calles de la Ciudad de México por el municipio correspondiente. A partir de este filtro, se aplicó una autointersección para obtener las esquinas correspondientes a las vías del municipio. 
+
+
+```r
+### Data ---------------------------------------------------------------------
+
+# Lines and streets from the point of interest
+shp_streets <- st_read(paste0(RAW_DATA, SHP_DIRECTORY,SHP_FILE_C)) |>
+  filter(CVE_MUN == '014') |> 
+  st_transform(crs = CRS_MX)
+
+# We get the corners from LINESTRING 
+corners_sf <- st_intersection(shp_streets) |>
+  filter(st_geometry_type(geometry) == "POINT") |>
+  select(origins, geometry)
+corners_sf <- corners_sf[!duplicated(st_as_binary(corners_sf$geometry)), ] |>
+  mutate(id_node = row_number())
+
+```
+
+Definimos nuestro punto de partida en la CDMX, como en la siguiente ![Dirección](https://maps.app.goo.gl/p2SqWT23DZ66zDmX6) como punto de partida. 
+
+Se fijará un presupuesto de tiempo de 30 minutos y se asume como velocidad de conducción de bicilceta media de 4 metros por segundo. 
+
+```r
+### Execution  -----------------------------------------------------------------
+
+# Starting Point 
+# https://maps.app.goo.gl/CnuKBE7yScWgANmp8
+lat <- 19.39798481495679
+lon <- -99.1615400498479
+
+# Maximum duration of trajectories in seconds 
+T_segs <- 30*60 
+
+VEL_MPS <- 4 # Average velocity in metter per second
+
+TWT_IND <- TRUE # Indicator if there are waiting times 
+TRAFFIC_WT <- 120 # Witing time in seconds 
+TWT_PROB <- 0.1 # Probability of waiting, wait for green lights
+
+POINT_TOLERANCE_M <- 150 # tolerance to find corner from point (mts)
+ADJ_TOLERANCE_M <- 3 # node-edge adjacency tolerance (mts)
+ADJE_TOLERANCE_M <- 3 # tolerance for edge-vertex adjacency (mts) 
+
+DISPLAY <- TRUE # Display map
+ECHO <- FALSE # Print simulation status 
+```
+
+
+## Ejecución
+
+Ejecutamos las simulación con las parámetros definidos, obteniendo los siguientes resultados:
+
+

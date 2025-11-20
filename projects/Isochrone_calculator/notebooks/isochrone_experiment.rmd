@@ -53,7 +53,7 @@ The following approach was used to prepare the data: Using INEGI's 2020 Geostati
 
 # Lines and streets from the point of interest
 shp_streets <- st_read(paste0(RAW_DATA, SHP_DIRECTORY,SHP_FILE_C)) |>
-  filter(CVE_MUN == '014') |> 
+  filter(CVE_MUN %in% c('014','015', '016')) |> 
   st_transform(crs = CRS_MX)
 
 # We get the corners from LINESTRING 
@@ -86,17 +86,17 @@ As we can see, even when we walk, particularly in an urban area, we find ourselv
 ### Execution  -----------------------------------------------------------------
 
 # Starting Point 
-# https://maps.app.goo.gl/p2SqWT23DZ66zDmX6
-lat <- 19.398085101174537
-lon <- -99.1560335457441
+# https://maps.app.goo.gl/CnuKBE7yScWgANmp8
+lat <- 19.39798481495679
+lon <- -99.1615400498479
 
 # Maximum duration of trajectories in seconds 
-T_segs <- 10*60 
+T_segs <- 30*60 
 
-VEL_MPS <- 1.4 # Average velocity in metter per second
+VEL_MPS <- 4 # Average velocity in metter per second
 
 TWT_IND <- TRUE # Indicator if there are waiting times 
-TRAFFIC_WT <- 80 # Witing time in seconds 
+TRAFFIC_WT <- 120 # Witing time in seconds 
 TWT_PROB <- 0.1 # Probability of waiting, wait for green lights
 
 POINT_TOLERANCE_M <- 150 # tolerance to find corner from point (mts)

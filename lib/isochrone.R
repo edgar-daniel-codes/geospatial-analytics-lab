@@ -486,7 +486,7 @@ calculate_isochrone <- function(lat,lon,T_segs,shp_streets,corners_sf
         opacity = 0.5,
         group= "Starting corner"
       ) |>
-      addControl("<b>Isochrones in area of interest</b>", position = "topright") |>
+      addControl("<b>Isochrones in the area of interest.</b>", position = "topright") |>
       addLayersControl(
         overlayGroups = c(
           "Zone of Interest",
