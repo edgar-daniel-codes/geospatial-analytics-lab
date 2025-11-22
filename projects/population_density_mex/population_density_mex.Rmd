@@ -1,5 +1,6 @@
 ---
-title: "Population Density: 15 minutes reach"
+title: "Population Density - Mexico"
+subtitle: "15 minutes reach"
 author: "Edgar Daniel"
 output: html_document
 ---
@@ -9,47 +10,136 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Question: How far can I travel from home on my bike?
+# Question: How many people can I reach in 15 minutes or less?
 
-Consider the following scenario: you are a young office worker living in the south-central area of Mexico City. Every day, you drive your car to and from the office during peak traffic hours. Mobility apps are too expensive, and you see lots of people happily cycling past while you wait for the traffic lights to turn green.
+In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+
+**Problem Statement**:
+
+Consider the following scenario: you are a retail store entering the Mexican market and developing an expansion plan for Mexico. The C-suite tells you that the strategy is to start by opening ten stores in the country, providing the following guidance:
+
+> You must open ten stores in ten different states. 
+> The objective is to maximise the population within a 15-minute radius of each store. 
+> You can select any geographical location; there are no other geographical restrictions.
+
+Please note that, for the sake of this experiment, we are ignoring geographical, political, legal and security constraints, which would otherwise be applicable for a more realistic approach.
 
 
 ```{r, ECHO = FALSE, WARNINGS=FALSE}
 library(here)
 library(knitr)
 library(dplyr)
+library(foreign)
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(sp)
+library(pracma)
+library(R.utils)
+library(geosphere)
+library(sf)
+library(rvest)
+library(rjson)
+library(RCurl)
+library(bayesbio)
+library(stringdist)
+library(maps)
+library(leaflet)
+library(lwgeom)
+library(leaflet.extras)
 
 # Ensure chunks use project root
 opts_knit$set(root.dir = here::here())
 
-# Paths to project root
-RAW_DATA <- here("data", "raw", "marco_geo_2020")
+# Paths 
+RAW_DATA <- here("data", "raw")
+CLEAN_DATA <- here("data", "clean")
+PROC_DATA <- here("data", "processed")
 SAMPLE_DATA <- here("data", "sample")
 CODE <- here("lib")
+MARCOGEO_FOLDER <- "/marco_geo_2020" 
+CENSO_FOLDER <- "/mex_censo_2020" 
 
-source(paste0(CODE, "/isochrone.R"))
 
-# Parametros 
+#source(paste0(CODE, "/isochrone.R"))
+
+# Parameters
+
+
 
 ```
 
 
-**Problem Statement**:
-
-Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
-
-
 ## Data Preparation 
 
-The following approach was used to prepare the data: Using INEGI's 2020 Geostatistical Framework, the Mexico City street file was filtered by the relevant municipality. Based on this filter, an auto-intersection was applied to obtain the corners corresponding to the municipality's roads. 
+In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
 
-
+First the census data: 
 
 ```{r}
 ### Data ---------------------------------------------------------------------
 
 
+# Censo 2020 nivel manzana 
+files <- sprintf("%s/RESAGEBURB_%02s_2020_csv/RESAGEBURB_%02sCSV20.csv"
+                , paste0(RAW_DATA,CENSO_FOLDER)
+                , 1:32, 1:32)
+
+files_raw <- lapply(files, function(f) {
+  if (file.exists(f)) read.csv(f) else NULL
+})
+
+censo_df <- do.call(rbind, files_raw[!sapply(files_raw, is.null)]) |>
+  # Filter ouit aggregated total for entity, mun, ageb
+  filter(ENTIDAD !=0, MUN != 0, LOC != 0, AGEB != '0000', MZA != 0)  |>
+  # Select the columns of interest 
+  select('ENTIDAD','MUN','LOC','AGEB','MZA', 'POBTOT')  |>
+  # Give format to columns and create index CVEGEO
+  mutate(
+    ENTIDAD = sprintf("%02s", ENTIDAD), 
+    MUN = sprintf("%03s", MUN), 
+    LOC = sprintf("%04s", LOC), 
+    AGEB = sprintf("%04s", AGEB), 
+    MZA = sprintf("%04s", MZA),
+    CVEGEO = paste0(ENTIDAD, MUN, LOC, AGEB, MZA)
+  )
+
+```
+
+Now we get the shapefiles for each MZA in th ecountry:
+
+```{r}
+# MZN polygons from the whole country 
+files <- sprintf("%s/%s/conjunto_de_datos/%02sm.shp"
+                 ,paste0(RAW_DATA,MARCOGEO_FOLDER)
+                 , listDirectory(paste0(RAW_DATA,MARCOGEO_FOLDER)), 1:32)
+
+shapes <- lapply(files, function(f) {
+  if (file.exists(f)) st_read(f, quiet = TRUE) else NULL
+})
+
+# Concat all SHP files and delete null geometries 
+
+mzns_shp <- do.call(rbind, shapes[!sapply(shapes, is.null)]) |>
+  st_make_valid()
+
+mzns_shp <- mzns_shp[!is.na(st_geometry(mzns_shp)) & !st_is_empty(mzns_shp), ]
+
+mzns_shp <- mzns_shp |>
+  transform(geometry = st_make_valid(geometry)) |>
+  subset(!is.na(st_geometry(.)) & !st_is_empty(.)) |>
+  st_collection_extract("POLYGON", warn = FALSE)
+
+
+
+
 ```
 
 
+Finally, we add both in the same table and assign the correspondig Uber's H3 Cell ( [See documentation](https://h3geo.org/) ). This in order to better aggregate total population by zone regardless of INEGI's official stratification. 
 
+```{r}
+
+Error in plot_sf(x, ...) : 
+  NA value(s) in bounding box. Trying to plot empty geometries?
+```
