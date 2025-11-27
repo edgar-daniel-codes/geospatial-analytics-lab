@@ -18,9 +18,10 @@ In this notebook, we explore the task of creating a list of points on the map. A
 
 Consider the following scenario: you are a retail store entering the Mexican market and developing an expansion plan for Mexico. The C-suite tells you that the strategy is to start by opening ten stores in the country, providing the following guidance:
 
-> You must open ten stores in ten different states. 
-> The objective is to maximise the population within a 15-minute radius of each store. 
-> You can select any geographical location; there are no other geographical restrictions.
+> 1.- You must open ten stores in ten different states. 
+> 2.- The objective is to maximise the population within a 15-minute radius of each store. 
+> 3.- You can select any geographical location; there are no other geographical restrictions.
+> 4.- For a store to be considered part of a state, it must be located within the state, and at least 90% of its isochrone must also be within the state. 
 
 Please note that, for the sake of this experiment, we are ignoring geographical, political, legal and security constraints, which would otherwise be applicable for a more realistic approach.
 
@@ -47,6 +48,7 @@ library(maps)
 library(leaflet)
 library(lwgeom)
 library(leaflet.extras)
+library(h3jsr)
 
 # Ensure chunks use project root
 opts_knit$set(root.dir = here::here())
@@ -57,14 +59,17 @@ CLEAN_DATA <- here("data", "clean")
 PROC_DATA <- here("data", "processed")
 SAMPLE_DATA <- here("data", "sample")
 CODE <- here("lib")
+
 MARCOGEO_FOLDER <- "/marco_geo_2020" 
 CENSO_FOLDER <- "/mex_censo_2020" 
 
+CENSO_GEOJSON <-  "/inegi_censo_2020_urbageb.geojson"
+CELLS_GEOJSON <-  "/cells_censo_2020_urbageb.geojson"
 
 #source(paste0(CODE, "/isochrone.R"))
 
 # Parameters
-
+H3_RESOLUTION <- 8
 
 
 ```
@@ -100,7 +105,7 @@ censo_df <- do.call(rbind, files_raw[!sapply(files_raw, is.null)]) |>
     MUN = sprintf("%03s", MUN), 
     LOC = sprintf("%04s", LOC), 
     AGEB = sprintf("%04s", AGEB), 
-    MZA = sprintf("%04s", MZA),
+    MZA = sprintf("%03s", MZA),
     CVEGEO = paste0(ENTIDAD, MUN, LOC, AGEB, MZA)
   )
 
@@ -125,14 +130,6 @@ mzns_shp <- do.call(rbind, shapes[!sapply(shapes, is.null)]) |>
 
 mzns_shp <- mzns_shp[!is.na(st_geometry(mzns_shp)) & !st_is_empty(mzns_shp), ]
 
-mzns_shp <- mzns_shp |>
-  transform(geometry = st_make_valid(geometry)) |>
-  subset(!is.na(st_geometry(.)) & !st_is_empty(.)) |>
-  st_collection_extract("POLYGON", warn = FALSE)
-
-
-
-
 ```
 
 
@@ -140,6 +137,210 @@ Finally, we add both in the same table and assign the correspondig Uber's H3 Cel
 
 ```{r}
 
-Error in plot_sf(x, ...) : 
-  NA value(s) in bounding box. Trying to plot empty geometries?
+# Clean up  NAs in population variable
+censo_df$POBTOT <- ifelse(is.na(as.numeric(censo_df$POBTOT)),
+                          0, as.numeric(censo_df$POBTOT))
+
+# Agregamos geometrias al objeto 
+censo_sf <- censo_df |>
+  left_join(mzns_shp
+            , by = 'CVEGEO') |>
+  st_as_sf() |>
+  mutate(
+    # Centroid ,st_point_on_surface to make sure is an inner point
+    geometry   = st_point_on_surface(geometry),     
+  ) 
+
+
+# Drop Null Geometries 
+censo_sf <- censo_sf[!is.na(st_geometry(censo_sf)) & !st_is_empty(censo_sf), ]
+
+# Add H3 cell corresponding to each point 
+censo_sf <- censo_sf |>
+  mutate(
+    CELL = point_to_cell(st_transform(geometry,4326), res = H3_RESOLUTION), 
+  ) |>
+  # Just keep the columns to use in the algorithm 
+  select(CVEGEO, ENTIDAD, CELL, POBTOT)
+
+# Aggregated at a cell level
+agg_cell <- censo_sf |>
+  group_by(CELL) |> 
+  summarise(
+    POBTOT = sum(POBTOT, na.rm = TRUE),
+    .groups = "drop"
+  ) 
+
 ```
+
+
+We save the complete sf object as a GeoJSON to do not need to process all data more than once, also save the polygon files of the country states, also save a pre calculated aggregate of population by cell. 
+
+
+```{r, WARNING= FALSE}
+
+
+# Save the data into a processed folder 
+st_write(censo_sf,paste0(PROC_DATA, CENSO_GEOJSON)
+         ,layer = CENSO_GEOJSON)
+  
+st_write(agg_cell,paste0(PROC_DATA, CELLS_GEOJSON)
+         ,layer = CELLS_GEOJSON)
+
+```
+
+Read the cleaned info
+
+```{r}
+
+# Read the clean data 
+censo_sf <- st_read(paste0(PROC_DATA, CENSO_GEOJSON))
+cells_sf <- st_read(paste0(PROC_DATA, CELLS_GEOJSON))
+
+# Append cell geometry to aggregate and add entity column 
+cells_sf <- cells_sf |> 
+  # Assign state to each cell
+  left_join(
+    censo_sf |> st_drop_geometry() |> select(CELL,ENTIDAD) |> distinct(CELL, .keep_all = TRUE)
+            , by = 'CELL') |>
+  # Dropping old geoometry 
+  st_drop_geometry() |>    
+  # H3 geometry in WGS84
+  mutate(geometry = cell_to_polygon(CELL)) |>        
+   # H3 uses EPSG:4326
+  st_as_sf(crs = 4326) 
+
+
+```
+
+Let's see how does the population density looks like in a map:
+
+
+```{r}
+
+### Visualización --------------------------------------------------------------
+
+library(leaflet)
+
+pal <- colorNumeric(
+  palette = c("white", "darkblue"),   # use a color vector or palette name
+  domain = cells_sf$POBTOT
+)
+
+leaflet(cells_sf) |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  addPolygons(
+    color = "transparent",
+    weight = 1,
+    fillColor = ~pal(POBTOT),
+    fillOpacity = 0.5,
+    label = ~paste0("POBTOT: ", POBTOT),
+    group = "Celdas H3 R6"
+  )
+
+```
+
+
+
+!(Population density in Mexican City Metropolitan Area)["./images/dens_mx_metropolitan.png"]
+
+As we can see, most of the population is highly concentrated in urban areas. Another interesting pattern is that neighbouring cells do not necessarily have a high population. That's why we should examine the most populated cells in more detail. 
+
+## The Algorithm 
+
+To satisfy the requested business requirements, we can see that, in order to maximise population reach when selecting 10 locations from 10 states, it is sufficient to create a championship by selecting the location with the best population reach in each state, and then selecting the top 10 states, thus satisfying the restrictions and maximising our objective function. 
+
+Now, the following algorithm is centered at a state level, knowing that this will be repeated in each state. 
+
+**The isochrone approximation** Given the high cost of computing isochrones, or equivalently, the high cost of using a reliable API, we are going to use a circular buffer approximation based on a 15-minute isochrone from downtown Mexico City (Mexico City being one of the cities with the worst traffic conditions). By doing this, we will underestimate our point selection reach, which is not necessarily a bad thing given that we ultimately want to maximize it.
+
+The algorithm is based on a simple epsilon-greedy heuristic, where: 
+
+
+
+Let´s run the main loop 
+```{r}
+
+
+MAX_ITERS <- 10 # Max iterations by state 
+EPS <- 0.5 # Epsilon
+EPS_DECAY <- 0.05 #   Epsilon decay 
+# NOISE <- # Centroid mnoise in metters 
+
+# nationwide lists 
+cells_visited <- c()
+opt_points <- c()
+opt_values <- c()
+
+
+# state level values 
+opt_point <- NULL
+opt_value <- -Inf
+
+cells_list <- 
+
+while(){
+  
+  
+}
+
+
+```
+
+
+
+
+
+
+
+```{r}
+
+# Needed library
+library(httr)
+library(jsonlite)
+library(osrm)
+library(hereR)
+library(h3jsr)
+library(purrr)
+
+#Pega aquí tu clave real entre comillas
+# set_key("key_token")
+
+
+# Time for isochrone in minutes 
+TIME_MIN <- 15
+
+# Center point of the isochrone 
+POINT <- data.frame(
+  lng = -99.17296164232874,
+  lat = 19.410566883421073
+) |>
+  st_as_sf(coords = c("lng", "lat"), crs = 4326)
+
+RANGE_TYPE <-  "time" # Time for Isochrones 
+
+TRANSPORT <- "car" # 
+
+TRAVEL_TIME <- "01/10/2025 13:00:00" # The moment the journey begins
+
+TIMEZONE <- "America/Mexico_City"
+
+
+
+# Call the HERE API
+iso_here15 <- isoline(
+  poi = red_nacional_df,
+  range = TIME_MIN*60,
+  range_type = RANGE_TYPE,
+  transport_mode = TRANSPORT,
+  datetime = as.POSIXct(,  
+                        format = "%d/%m/%Y %H:%M:%S", 
+                        tz = TIMEZONE)
+)
+
+
+```
+
+
+
+

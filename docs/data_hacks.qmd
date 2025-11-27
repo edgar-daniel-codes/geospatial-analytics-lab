@@ -220,3 +220,72 @@ for i in range(1, 33):
     os.remove(dest)
 
 ```
+
+
+# APIs 
+
+## Isochrones and distance matrix 
+
+### HERE APIs 
+
+(Here)[https://www.here.com/] is a  matured, global player in the geo-spatial/location-tech domain, leveraging decades of map content, sensor and fleet data, to enable real-time location intelligence and mobility solutions. 
+
+One of these solutions is the Isochrone API, which provides information on the n-minute isochrone for a given point, transportation mode and day. Given their years of experience and the maturity of their enterprise, we can safely assume that they are among the most reliable on the market. For final results or precision-critical tasks, this is one of the benchmark solutions. 
+
+To consult a list of isochrones via latitude and longitude, we can use the following code snippet:
+
+
+```r
+
+# Needed library
+library(httr)
+library(jsonlite)
+library(osrm)
+library(hereR)
+library(h3jsr)
+library(purrr)
+
+#Pega aquí tu clave real entre comillas
+# set_key("key_token")
+
+
+
+# Time for isochrone in minutes 
+TIME_MIN <- 15
+
+# Center point of the isochrone 
+POINT <- data.frame(
+  lng = -99.17296164232874, # Modify your point(s) coordinates 
+  lat = 19.410566883421073
+) |>
+  st_as_sf(coords = c("lng", "lat"), crs = 4326)
+
+RANGE_TYPE <-  "time" # Time for Isochrones 
+
+TRANSPORT <- "car" # 
+
+TRAVEL_TIME <- "01/10/2025 13:00:00" # The moment the journey begins
+
+TIMEZONE <- "America/Mexico_City"
+
+
+
+# Call the HERE API
+iso_here15 <- isoline(
+  poi = POINT,
+  range = TIME_MIN*60,
+  range_type = RANGE_TYPE,
+  transport_mode = TRANSPORT,
+  datetime = as.POSIXct(,  
+                        format = "%d/%m/%Y %H:%M:%S", 
+                        tz = TIMEZONE)
+)
+
+# We save the GEOJSON with the Isochrone 
+st_write(iso_here15, paste0(CLEAN_DATA,"iso_chrone.geojson"),
+         driver = "GeoJSON",
+         delete_dsn = TRUE)
+
+```
+
+
