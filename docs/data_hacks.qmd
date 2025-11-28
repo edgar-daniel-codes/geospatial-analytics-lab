@@ -262,7 +262,7 @@ POINT <- data.frame(
 
 RANGE_TYPE <-  "time" # Time for Isochrones 
 
-TRANSPORT <- "car" # 
+TRANSPORT <- "car" # “scooter” for 2 wheelers including motorbikes 
 
 TRAVEL_TIME <- "01/10/2025 13:00:00" # The moment the journey begins
 
@@ -276,7 +276,7 @@ iso_here15 <- isoline(
   range = TIME_MIN*60,
   range_type = RANGE_TYPE,
   transport_mode = TRANSPORT,
-  datetime = as.POSIXct(,  
+  datetime = as.POSIXct(TRAVEL_TIME,  
                         format = "%d/%m/%Y %H:%M:%S", 
                         tz = TIMEZONE)
 )

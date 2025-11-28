@@ -91,8 +91,8 @@ DerivedData/
 
 # Avoiding data dumps 
 data/raw/**
-data/interim/**
-data/external/**
+data/inference/**
+data/clean/**
 data/processed/**
 
 # Just sample data or required 

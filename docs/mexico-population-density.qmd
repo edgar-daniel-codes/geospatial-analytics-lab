@@ -1,8 +1,871 @@
 ---
-title: "Mexico population Density - 15 minutes reach"
+title: "Population Density - Mexico"
+subtitle: "15 minutes reach"
 author: "Edgar Daniel"
 page-layout: article
+output: html_document
 ---
 
+# Question: How many people can I reach in 15 minutes or less?
+
+In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+
+**Problem Statement**:
+
+Consider the following scenario: you are a retail store entering the Mexican market and developing an expansion plan for Mexico. The C-suite tells you that the strategy is to start by opening ten stores in the country, providing the following guidance:
+
+> 1.- You must open ten stores in ten different states. 
+> 
+> 2.- The objective is to maximise the population within a 15-minute radius of each store. 
+> 
+> 3.- You can select any geographical location; there are no other geographical restrictions.
+> 
+> 4.- For a store to be considered part of a state, it must be located within the state, and at least 90% of its isochrone must also be within the state. 
+
+Please note that, for the sake of this experiment, we are ignoring geographical, political, legal and security constraints, which would otherwise be applicable for a more realistic approach.
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+library(foreign)
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(maps)
+library(leaflet)
+library(lwgeom)
+library(leaflet.extras)
+library(h3jsr)
 
 
+
+
+# Paths 
+SAMPLE_DATA <- "../data/sample"
+
+MARCOGEO_FOLDER <- "/marco_geo_2020" 
+CENSO_FOLDER <- "/mex_censo_2020" 
+
+CENSO_GEOJSON <-  "/inegi_censo_2020_urbageb.geojson"
+CELLS_GEOJSON <-  "/cells_censo_2020_urbageb.geojson"
+
+REFERENCE_ISO_CDMX_C <- "/isochrone_cdmx_downtown_car.geojson"
+REFERENCE_ISO_CDMX_M <- "/isochrone_cdmx_downtown_mbike.geojson"
+
+FILE_TOP_LOCS <- "/iso_point_winners_nat.csv"
+FILE_TOP_LOCS_CDMX <- "/iso_point_winners_cdmx.csv"
+FILE_CENSO_CELLS <- "/censo_cells_2020.geojson"
+FILE_MX_POPS <-"/entity_coverage.csv"
+
+FINAL_ISO_CDMX_C <- "/isochrone_cdmx_winners_c.geojson"
+FINAL_ISO_CDMX_M <- "/isochrone_cdmx_winners_mb.geojson"
+FINAL_ISO_MX_C <- "/isochrone_mx_winners_c.geojson"
+FINAL_ISO_MX_M <- "/isochrone_mx_winners_mb.geojson"
+
+SHP_CDMX <- "/09ent.shp"
+
+
+# Parameters
+H3_RESOLUTION <- 8
+
+```
+
+
+## Data Preparation 
+
+In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+
+First the census data: 
+
+```r
+### Data ---------------------------------------------------------------------
+
+
+# Censo 2020 nivel manzana 
+files <- sprintf("%s/RESAGEBURB_%02s_2020_csv/RESAGEBURB_%02sCSV20.csv"
+                , paste0(RAW_DATA,CENSO_FOLDER)
+                , 1:32, 1:32)
+
+files_raw <- lapply(files, function(f) {
+  if (file.exists(f)) read.csv(f) else NULL
+})
+
+censo_df <- do.call(rbind, files_raw[!sapply(files_raw, is.null)]) |>
+  # Filter ouit aggregated total for entity, mun, ageb
+  filter(ENTIDAD !=0, MUN != 0, LOC != 0, AGEB != '0000', MZA != 0)  |>
+  # Select the columns of interest 
+  select('ENTIDAD','MUN','LOC','AGEB','MZA', 'POBTOT')  |>
+  # Give format to columns and create index CVEGEO
+  mutate(
+    ENTIDAD = sprintf("%02s", ENTIDAD), 
+    MUN = sprintf("%03s", MUN), 
+    LOC = sprintf("%04s", LOC), 
+    AGEB = sprintf("%04s", AGEB), 
+    MZA = sprintf("%03s", MZA),
+    CVEGEO = paste0(ENTIDAD, MUN, LOC, AGEB, MZA)
+  )
+
+```
+
+Now we get the shapefiles for each MZA in the country:
+
+```r
+# MZN polygons from the whole country 
+files <- sprintf("%s/%s/conjunto_de_datos/%02sm.shp"
+                 ,paste0(RAW_DATA,MARCOGEO_FOLDER)
+                 , listDirectory(paste0(RAW_DATA,MARCOGEO_FOLDER)), 1:32)
+
+shapes <- lapply(files, function(f) {
+  if (file.exists(f)) st_read(f, quiet = TRUE) else NULL
+})
+
+# Concat all SHP files and delete null geometries 
+
+mzns_shp <- do.call(rbind, shapes[!sapply(shapes, is.null)]) |>
+  st_make_valid()
+
+mzns_shp <- mzns_shp[!is.na(st_geometry(mzns_shp)) & !st_is_empty(mzns_shp), ]
+
+```
+
+Finally, we add both in the same table and assign the correspondig Uber's H3 Cell ( [See documentation](https://h3geo.org/) ). This in order to better aggregate total population by zone regardless of INEGI's official stratification. 
+
+```r
+
+# Clean up  NAs in population variable
+censo_df$POBTOT <- ifelse(is.na(as.numeric(censo_df$POBTOT)),
+                          0, as.numeric(censo_df$POBTOT))
+
+# Add geometries to each object 
+censo_sf <- censo_df |>
+  left_join(mzns_shp
+            , by = 'CVEGEO') |>
+  st_as_sf(crs = st_crs(mzns_shp)) |>
+  mutate(
+    # Centroid ,st_point_on_surface to make sure is an inner point
+    geometry   = st_point_on_surface(geometry),     
+  ) 
+
+
+# Drop Null Geometries 
+censo_sf <- censo_sf[!is.na(st_geometry(censo_sf)) & !st_is_empty(censo_sf), ]
+
+# Add H3 cell corresponding to each point 
+censo_sf <- censo_sf |>
+  mutate(
+    CELL = point_to_cell(st_transform(geometry,4326), res = H3_RESOLUTION), 
+  ) |>
+  # Just keep the columns to use in the algorithm 
+  select(CVEGEO, ENTIDAD, CELL, POBTOT)
+
+# Aggregated at a cell level
+agg_cell <- censo_sf |>
+  group_by(CELL) |> 
+  summarise(
+    POBTOT = sum(POBTOT, na.rm = TRUE),
+    .groups = "drop"
+  ) 
+
+```
+
+We save the complete sf object as a GeoJSON to do not need to process all data more than once, also save the polygon files of the country states, also save a pre calculated aggregate of population by cell. 
+
+```r
+
+
+# Save the data into a processed folder 
+st_write(censo_sf,paste0(PROC_DATA, CENSO_GEOJSON)
+         ,layer = CENSO_GEOJSON)
+  
+st_write(agg_cell,paste0(PROC_DATA, CELLS_GEOJSON)
+         ,layer = CELLS_GEOJSON)
+
+```
+
+
+Read the cleaned info
+
+```r
+
+# Read the clean data 
+censo_sf <- st_read(paste0(PROC_DATA, CENSO_GEOJSON))
+cells_sf <- st_read(paste0(PROC_DATA, CELLS_GEOJSON))
+
+# Append cell geometry to aggregate and add entity column 
+cells_sf <- cells_sf |> 
+  # Assign state to each cell
+  left_join(
+    censo_sf |> st_drop_geometry() |> select(CELL,ENTIDAD) |> distinct(CELL, .keep_all = TRUE)
+            , by = 'CELL') |>
+  # Dropping old geoometry 
+  st_drop_geometry() |>    
+  # H3 geometry in WGS84
+  mutate(geometry = cell_to_polygon(CELL)) |>        
+   # H3 uses EPSG:4326
+  st_as_sf(crs = 4326) 
+
+# Get x, y coordinates from MZN centroid to filter out efficiently later
+censo_sf <- censo_sf  |>
+   mutate(
+    coords = st_coordinates(geometry),
+    lon    = coords[,1],
+    lat    = coords[,2]
+  ) |>
+  select(-coords)
+
+# POBTOT TO Numeric
+num0 <- function(x) replace_na(suppressWarnings(as.numeric(x)), 0)
+
+censo_sf <- censo_sf |> mutate(POBTOT = num0(POBTOT))
+cells_sf <- cells_sf |> mutate(POBTOT = num0(POBTOT))
+
+```
+
+Let's see how does the population density looks like in a map:
+
+
+![Population density in Mexican City Metropolitan Area](./images/dens_mx_metropolitan.png)
+
+As we can see, most of the population is highly concentrated in urban areas. Another interesting pattern is that neighbouring cells do not necessarily have a high population. That's why we should examine the most populated cells in more detail. 
+
+
+
+## The Algorithm 
+
+To satisfy the requested business requirements, we can see that, in order to maximise population reach when selecting 10 locations from 10 states, it is sufficient to create a championship by selecting the location with the best population reach in each state, and then selecting the top 10 states, thus satisfying the restrictions and maximising our objective function. 
+
+Now, the following algorithm is centered at a state level, knowing that this will be repeated in each state. 
+
+**The isochrone approximation** Given the high cost of computing isochrones, or equivalently, the high cost of using a reliable API, we are going to use a circular buffer approximation based on a 15-minute isochrone from downtown Mexico City (Mexico City being one of the cities with the worst traffic conditions). By doing this, we will underestimate our point selection reach, which is not necessarily a bad thing given that we ultimately want to maximize it.
+
+
+Particularly, we are taking as a center the following [point]("https://maps.app.goo.gl/QCBztVpVdCJEpC2L7") in Mexico City to represent the approcximation on the algorithm showed on the following diagram:
+
+![Isochrone approximation via Inner Circle (ISO15 car in blue, ISO15 motorbike in green)](./images/dens_mx_iso_approx.png)
+
+**epsilon-greedy selection algorithm** 
+
+The algorithm is based on a simple epsilon-greedy heuristic, that is, in each iteration we are looking for maximize the objective function inmediatly over each step regardless of future better selection, giving space for an exploration (random selection). Here the following pseudo-code:
+
+``` txt 
+------------------------------------------------------------
+Algorithm: State-Level Population Optimization via Isochrones
+------------------------------------------------------------
+
+Set MAX_ITERS = 250
+Set EPS = 0.5
+Set EPS_DECAY = 0.01
+Set MIN_EPS = 0.05
+
+Initialize opt_points = []
+Initialize opt_values = []
+Record start_time
+
+For each state 'ent' in {01, 02, ..., 32}:
+    Initialize:
+        cells_visited = []
+        opt_point = NULL
+        opt_value = -Infinity
+        iters = 0
+        eps = EPS
+        values_hist = []
+
+    Create ordered list of cells for this state:
+        cells_list = all cells within ENTIDAD == ent
+                     ordered by descending population (POBTOT)
+                     unique CELL identifiers only
+
+    While iters < MAX_ITERS:
+        Decrease epsilon: eps = max(MIN_EPS, eps - EPS_DECAY)
+
+        Choose exploration vs exploitation:
+            If random_number < eps:
+                current_cell = random sample from cells_list  # Explore
+            Else:
+                current_cell = top cell in cells_list         # Exploit
+
+        Try:
+            Obtain cell centroid for current_cell
+            Extract coordinates (x, y)
+
+            Select census polygons within bounding box:
+                filter censo_sf within (x ± inside_radius, y ± inside_radius)
+                keep relevant columns
+                assign CRS
+
+            Further filter by spatial coverage:
+                keep polygons covered by circular buffer centered at cell_centroid
+
+            Compute current_value:
+                sum of POBTOT within selected polygons
+
+            If current_value > opt_value:
+                opt_point = cell_centroid
+                opt_value = current_value
+
+        Catch any errors silently and continue
+
+        Update tracking variables:
+            Add current_cell to cells_visited
+            Remove visited cells from cells_list
+            Append opt_value to values_hist
+            Increment iters
+
+        Print iteration progress on same line
+
+    End While
+
+    Append opt_point and opt_value to global opt_points and opt_values
+    Record end_time
+    Print completion summary for this state with timing info
+
+End For
+
+------------------------------------------------------------
+End of Algorithm
+------------------------------------------------------------
+``` 
+
+Let´s run the main loop ... 
+
+```r
+
+MAX_ITERS <- 250 # Max iterations by state 
+EPS <- 0.5 # Epsilon
+EPS_DECAY <- 0.01 #   Epsilon decay
+MIN_EPS <- 0.05
+# NOISE <- # Centroid mnoise in metters 
+
+# nationwide lists 
+opt_points <- c()
+opt_values <- c()
+
+start <- Sys.time()
+
+
+for(ent in sprintf("%02s",1:32)){
+
+
+  # state level values
+  cells_visited <- c()
+  opt_point <- NULL
+  opt_value <- -Inf
+  iters <-0 
+  eps <- EPS 
+  values_hist <- c()
+  
+  # Generate ordeneate list of cells (by Population)
+  cells_list <- cells_sf |> 
+    st_drop_geometry() |> filter(ENTIDAD == ent) |>
+    select(CELL, POBTOT)  |> arrange(desc(POBTOT)) |>
+    distinct() |> pull(CELL) 
+  
+  while(iters < MAX_ITERS){
+    
+    # Define if we explore or maximize instantly
+    eps <- max(MIN_EPS, eps-EPS_DECAY)
+    if(runif(1)<eps){ # Explore
+      current_cell <- sample(cells_list,1)
+    } else{ # Maximize 
+      current_cell <- cells_list[1]
+    }
+    
+    # Create a buffer for the selected cell and evaluate 
+    try({
+      cell_centroid <- cells_sf |>
+    st_transform(st_crs(mzns_shp)) |>
+        filter(ENTIDAD == ent, CELL == current_cell) |> st_centroid() 
+    
+    coords <- cell_centroid |> st_coordinates()
+    x <- coords[,1]  
+    y <- coords[,2]  
+    
+    censo_sf_cell_aux <- censo_sf |>
+      filter(lon >= x - inside_radius,lon <= x + inside_radius
+             , lat >= y - inside_radius,lat <= y + inside_radius) |>
+      select(-c(lon, lat))  |>
+      st_set_crs(st_crs(mzns_shp)) 
+    
+    censo_sf_cell_aux <- censo_sf_cell_aux |>
+    st_filter(st_buffer(cell_centroid, dist = inside_radius),
+                  .predicate = st_covered_by)
+    
+    
+    current_value <- censo_sf_cell_aux |> st_drop_geometry() |>
+      pull(POBTOT) |> sum()
+    
+    
+    if(current_value>opt_value) {
+      opt_point <- cell_centroid
+      opt_value <- current_value
+      
+    } else{
+      opt_point <- opt_point
+      opt_value <- opt_value
+    }
+    
+    }, silent = TRUE)
+  
+    
+    
+    # Update lists 
+    cells_visited <- c(cells_visited,current_cell)
+    cells_list  <- cells_list[!cells_list %in% cells_visited]
+    opt_point <- opt_point
+    opt_value <- opt_value
+    values_hist <- c(values_hist,opt_value)
+    iters <- iters + 1
+    
+    cat("\rIteracion ", iters, " completada.")
+    
+  }
+    
+  # Update global values 
+  opt_points <- c(opt_points,opt_point)
+  opt_values <- c(opt_values,opt_value)
+  
+  end <- Sys.time()
+  
+  cat("\nEntidad ", ent," con optimo ",opt_value, " completada en ", end - start ," (segs).\n")
+  
+}
+
+end <- Sys.time()
+
+cat("\nProceso terminado en ", end - start ," (segs).")
+```
+
+
+Let's view the results to define the 10 points to use as new store points. Here the top 10 points where to put our stores with the best population estimates:
+
+ ```{r, echo= FALSE, message = FALSE, warning = FALSE}
+
+results_nation <- readr::read_csv(paste0(SAMPLE_DATA,FILE_TOP_LOCS)) 
+knitr::kable(results_nation)
+
+ ```
+
+
+
+## National Amalysis 
+
+We now calculate the real urban population coverage for the 15 minute isochrone based on the points obtained by the algorithm in the past section using the Isochrones from the HERE API for each one of the selected 10 points:
+
+```{r, warning=FALSE, message=FALSE}
+
+### Map  -----------------------------------------------------------------------
+
+library(leaflet)
+library(sf)
+
+
+car_iso15 <- st_read(paste0(SAMPLE_DATA,FINAL_ISO_MX_C))
+mb_iso15 <- st_read(paste0(SAMPLE_DATA,FINAL_ISO_MX_M))
+cells_sf <- st_read(paste0(SAMPLE_DATA,FILE_CENSO_CELLS))
+
+
+pal <- colorNumeric(
+  palette = c("white", "darkblue"),   # use a color vector or palette name
+  domain = cells_sf$POBTOT
+)
+
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  addPolygons(
+    data = cells_sf, 
+    color = "transparent",
+    weight = 1,
+    fillColor = ~pal(POBTOT),
+    fillOpacity = 0.5,
+    label = ~paste0("POBTOT: ", POBTOT),
+  )  |>
+  addPolygons(
+    data = car_iso15, 
+    color = "black",
+    weight = 1,
+    fillColor = "lightgreen",
+    fillOpacity = 0.7,
+  ) |>
+  addPolygons(
+    data = mb_iso15, 
+    color = "blue",
+    weight = 1,
+    fillColor = "lightblue",
+    fillOpacity = 0.5,
+  ) 
+
+
+```
+
+After evaluating the results over the census data, we concluded that 6.59% of total population reported by 2020 Census where inside one of the ten isochrones selected, and if we compare the covered population at an state level we can observe: 
+
+ ```{r, echo= FALSE, message = FALSE, warning = FALSE}
+
+pop_results <- readr::read_csv(paste0(SAMPLE_DATA,FILE_MX_POPS))
+knitr::kable(pop_results)
+
+ ```
+
+
+We can conclude here that, given the population concentration in small areas, some states, such as 01 (Aguascalientes) and 24 (San Luis Potosí), have high coverage, while others, such as 09 (Mexico City) and 15 (Mexico State), have low coverage given the extent of urban areas across their territories.  
+
+# Mexico City reach 
+
+Lets make a small twist to the problem, and thereby the algorithm, to solve a similar problem inside a particular city. 
+
+Now we want to cover the most of population in Mexico City area by choosing 7 storage locations maximizing the amount of people inside a 15 minute isochrone, with the following conditions:
+
+> 1. Open seven stores around the city. 
+> 
+> 2. The objective is to maximise the population within a 15-minute radius of each store. 
+> 
+> 3. You can select any location within CDMX; there are no geographical restrictions.
+> 
+> 4. If two different isochrones intersect, the number of people reached is counted just once. 
+
+## The modified Algorithm
+
+The algorithm for this part uses the same heuristic logic, employing the circular buffer to approximate the final isochrones and moving from cell to cell until the optimal location for the storage units around the city is found, while penalizing overlapping isochrone areas by not counting overlapping area population. The following is the pseudo code for the algorithm: 
+
+
+```text
+
+------------------------------------------------------------
+Algorithm: CDMX Population Coverage Optimization
+------------------------------------------------------------
+
+1.  Filter input data to keep only the CDMX cells.
+
+2.  Set parameters:
+        MAX_ITERS     = 300
+        EPS            = 0.5
+        EPS_DECAY      = 0.01
+        MIN_EPS        = 0.05
+        STORAGE_UNITS  = 7
+
+3.  Initialize storage structures:
+        opt_points      ← empty list
+        opt_cells       ← empty list
+        opt_values      ← empty numeric vector
+        isochrones_list ← empty list
+
+4.  Initialize loop variables:
+        cells_visited ← empty vector
+        min_idx       ← NULL
+        min_value     ← -∞
+        iters         ← 1
+        eps           ← EPS
+        values_hist   ← empty vector
+
+5.  Build ordered list of candidate cells:
+        cells_list ← all CDMX cells sorted by descending population (POBTOT)
+                      unique CELL identifiers only.
+
+6.  Begin main optimization loop:
+        WHILE iters < MAX_ITERS:
+
+            a. Decay exploration rate:
+                   eps ← max(MIN_EPS, eps - EPS_DECAY)
+
+            b. Choose exploration vs exploitation:
+                   IF random_number < eps:
+                        current_cell ← random cell from cells_list     # explore
+                   ELSE:
+                        current_cell ← top cell in cells_list           # exploit
+
+            c. TRY (evaluate selected cell):
+                   1.  Obtain cell centroid and transform to match CRS.
+                   2.  Extract centroid coordinates (x, y).
+                   3.  Select census polygons inside bounding box (x ± inside_radius, y ± inside_radius).
+                   4.  Assign CRS and create circular buffer (point_buffer) with radius = inside_radius.
+                   5.  Spatially filter census polygons covered by the buffer.
+                   6.  Compute current_value = sum of POBTOT within buffer.
+
+                   7.  Adjust for overlap with previous buffers:
+                           hit ← TRUE if point_buffer intersects union of existing isochrones.
+                           IF hit:
+                               inter_shape ← intersection area between current buffer and union of existing ones.
+                               adjustment  ← sum of POBTOT within inter_shape.
+                               current_value ← current_value - adjustment
+
+                   8.  Update best storage points:
+                           IF iters > STORAGE_UNITS:
+                               # Replace the weakest stored candidate if improved
+                               IF current_value > min_value:
+                                   Replace entry at min_idx with new centroid, cell, value, and buffer.
+                                   Recompute (min_idx, min_value) = index/value of new minimum opt_value.
+                           ELSE:
+                               # Still filling available storage slots
+                               Append current centroid, cell, value, and buffer to lists.
+                               IF current_value > min_value:
+                                   min_value ← current_value
+                                   min_idx   ← iters
+
+            d. Catch any errors silently and continue.
+
+            e. Update iteration tracking:
+                   Add current_cell to cells_visited.
+                   Remove visited cells from cells_list.
+                   Append sum(opt_values) to values_hist.
+                   iters ← iters + 1
+                   Print iteration progress inline.
+
+7.  End WHILE loop.
+
+------------------------------------------------------------
+End of Algorithm
+------------------------------------------------------------
+
+```
+
+
+Now, let's run the past algorithm to get the selected storage units around Mexico City that maximizes the total population inside the 15 minutes isochrones:
+
+
+```r
+
+# We filter the CDMX data to focus on the area of interest 
+cdmx_cells_sf <- cells_sf |> filter(ENTIDAD == '09')
+
+
+options(warn = -1) # Deactivate Warnings 
+
+MAX_ITERS <- 300 # Max iterations 
+EPS <- 0.5 # Epsilon
+EPS_DECAY <- 0.01 #   Epsilon decay
+MIN_EPS <- 0.05
+STORAGE_UNITS <- 7
+
+#  lists 
+opt_points <-  list()
+opt_cells  <- list()
+opt_values <- numeric()
+isochrones_list <- list()
+
+
+# Value initiations 
+cells_visited <- c()
+min_idx <- NULL # min density index 
+min_value <- -Inf # min density value
+iters <- 1  
+eps <- EPS 
+values_hist <- c()
+
+start <- Sys.time()  
+  
+# Generate ordeneate list of cells (by Population)
+cells_list <- cdmx_cells_sf |> 
+    st_drop_geometry() |>
+    select(CELL, POBTOT)  |> arrange(desc(POBTOT)) |>
+    distinct() |> pull(CELL) 
+  
+while(iters < MAX_ITERS){
+    
+  # Define if we explore or maximize instantly
+  eps <- max(MIN_EPS, eps-EPS_DECAY)
+  if(runif(1)<eps){ # Explore
+    current_cell <- sample(cells_list,1)
+  } else{ # Maximize 
+    current_cell <- cells_list[1]
+  }
+    
+  # Create a buffer for the selected cell and evaluate 
+  try({
+    cell_centroid <- cdmx_cells_sf |>
+    st_transform(st_crs(mzns_shp)) |>
+      filter(CELL == current_cell) |> st_centroid() 
+    
+    coords <- cell_centroid |> st_coordinates()
+    x <- coords[,1]  
+    y <- coords[,2]  
+    
+    censo_sf_cell_aux <- censo_sf |>
+      filter(lon >= x - inside_radius,lon <= x + inside_radius
+             , lat >= y - inside_radius,lat <= y + inside_radius) |>
+      select(-c(lon, lat))  |>
+      st_set_crs(st_crs(mzns_shp)) 
+    
+    point_buffer <- st_buffer(cell_centroid, dist = inside_radius)
+    
+    censo_sf_cell_aux <- censo_sf_cell_aux |>
+    st_filter(point_buffer,
+                  .predicate = st_covered_by)
+    
+    
+    current_value <- censo_sf_cell_aux |> st_drop_geometry() |>
+      pull(POBTOT) |> sum()
+    
+    
+    # We adjust current_value removing overlapped mzna's. 
+    hit <- length(isochrones_list) > 0 &&
+    st_intersects(
+      point_buffer,
+      st_union(st_transform(do.call(c, lapply(isochrones_list, st_as_sfc)), st_crs(point_buffer))),
+      sparse = FALSE
+    )[1, 1]
+    
+    if(hit){
+      inter_shape <- if (length(isochrones_list) == 0){
+        st_sfc(st_geometrycollection(), crs = st_crs(point_buffer))
+        } else {     
+        st_intersection(point_buffer,
+      st_union(st_transform(do.call(c, lapply(isochrones_list, st_as_sfc)), crs = st_crs(point_buffer))))
+        }
+
+      adjustment <- censo_sf_cell_aux |>
+                  st_filter(inter_shape,
+                  .predicate = st_covered_by) |> 
+        st_drop_geometry() |> pull(POBTOT) |> sum()
+      current_value <- current_value - adjustment
+    } else{
+      current_value <- current_value   
+    }
+    
+    if(iters>STORAGE_UNITS){
+      # If we improve the worst value 
+      if(current_value > min_value) {
+      
+      # Values update 
+      opt_points[[min_idx]] <- cell_centroid 
+      opt_values[min_idx] <- current_value 
+      opt_cells[[min_idx]] <- current_cell
+      isochrones_list[[min_idx]] <- point_buffer
+      
+      # Index update 
+      # redefine mins
+      min_value <- Inf
+      for (i in seq_along(opt_values)) {
+        val <- opt_values[i]
+        if (val < min_value) {
+          min_idx <- i
+          min_value <- val
+        }
+      }
+      
+      } 
+    } else{
+      # If we have not elected yet 5 storage locations we just add them
+      opt_points[[iters]] <- cell_centroid 
+      opt_values[iters] <- current_value 
+      opt_cells[[iters]] <- current_cell
+      isochrones_list[[iters]] <- point_buffer
+      
+      if(current_value > min_value) {
+        min_value <- current_value
+        min_idx <- iters
+      }
+      
+    }
+    
+    
+    
+    }, silent = TRUE)
+  
+    
+    
+    # Update lists 
+    cells_visited <- c(cells_visited,current_cell)
+    cells_list  <- cells_list[!cells_list %in% cells_visited]
+    values_hist <- c(values_hist,sum(opt_values))
+    iters <- iters + 1
+    
+    cat("\rIter ", iters, " completed.")
+    
+  }
+    
+end <- Sys.time()
+
+cat("\nLoop ended:  ", end - start ," (segs).")
+
+
+```
+
+
+
+## A 15 minutes city 
+
+Now, let's see what the algorithm's results show about the business problem given at the beginning of the section. 
+
+The selected location with their respective POBTOT approximation via the circular buffer are: 
+
+
+If we calculate the HERE API isochrones , we can map out the actual coverage for each one of the selected 15 minutes isochrones :
+
+```{r, echo = FALSE, warning = FALSE}
+
+### Map ------------------------------------------------------------------------
+
+car_iso15 <- st_read(paste0(SAMPLE_DATA,FINAL_ISO_CDMX_C))
+mb_iso15 <- st_read(paste0(SAMPLE_DATA,FINAL_ISO_CDMX_M))
+cdmx_poly <- st_read(paste0(SAMPLE_DATA,SHP_CDMX))
+cdmx_cells_sf <- st_read(paste0(SAMPLE_DATA,FILE_CENSO_CELLS))
+
+library(sf)
+library(dplyr)
+library(leaflet)
+library(htmltools)
+library(scales)
+
+# Prepare the data
+cdmx_cells_sf <- cdmx_cells_sf |>
+  filter(ENTIDAD == "09") |>
+  st_transform(4326)
+poly_cdmx <- st_transform(cdmx_poly, 4326)
+iso15 <- st_transform(mb_iso15, 4326)
+pts <- st_transform(opt_points_sf, 4326)
+
+
+# Color palette for population density 
+pal <- colorNumeric(
+  palette = c("#f2fff5","#c7f7d6","#8ae5a8","#34c277", "#007a3d"   
+), 
+  domain  = cells_cdmx$POBTOT,
+  na.color = "transparent"
+)
+
+
+# Final map for CDMX isochrone coverage 
+m_pop <- leaflet(width="400",height = "500px", options = leafletOptions(minZoom = 9)) |>
+  addProviderTiles(providers$CartoDB.PositronNoLabels) |>
+
+  # CDMX boundary
+  addPolygons(
+    data = poly_cdmx,
+    color = "#2b2b2b", weight = 2,
+    fillOpacity = 0
+  ) |>
+  # Population H3 cells 
+  addPolygons(
+    data = cells_cdmx,
+    color = NA, weight = 0,
+    fillColor = ~pal(POBTOT),
+    fillOpacity = 0.45,
+    label = ~sprintf("Población: %s", comma(POBTOT))
+  ) |>
+  # Isochrones
+  addPolygons(
+    data = iso15,
+    color = "#2a6fdb", weight = 1.2,
+    fillColor = "#6aa6ff",
+    fillOpacity = 0.35
+  ) |>
+  # Optimal points
+  addCircleMarkers(
+    data = pts,
+    radius = 5,
+    color = "white", weight = 2,
+    fillColor = "#2a6fdb", fillOpacity = 1
+  ) |> 
+  addLegend(
+  pal       = pal,
+  values    = cells_cdmx$POBTOT,
+  title     = "Population",
+  position  = "bottomleft",
+  labFormat = labelFormat(big.mark = ","),
+  className = "small-legend"
+)
+
+
+m_pop
+```

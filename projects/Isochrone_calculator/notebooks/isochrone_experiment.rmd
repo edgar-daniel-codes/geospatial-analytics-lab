@@ -16,7 +16,7 @@ But before you go online and buy your own bike, you need to define the following
 
 So, the problem you want to solve is: From my starting point (home), how long does it take to travel 30 minutes by bicycle? 
 
-```{r, ECHO = FALSE, WARNINGS=FALSE}
+```{r, echo = FALSE, warning=FALSE}
 library(here)
 library(knitr)
 library(dplyr)
@@ -112,7 +112,7 @@ ECHO <- FALSE # Print simulation status
 
 We then execute the algorithm, printing the map for the given point and travel times:
 
-```{r, WARNING= FALSE}
+```{r, warning= FALSE}
 isoc <- calculate_isochrone(lat,lon,T_segs,shp_streets,corners_sf
                          , VEL_MPS
                          , TWT_IND, TRAFFIC_WT,TWT_PROB
@@ -132,7 +132,7 @@ Note how the map layer shows us the arrival of users who start from a corner and
 We save the results of this simultation:
 
 
-```{r, WARNING= FALSE}
+```{r, warning= FALSE}
 
 st_write(shp_streets,paste0(SAMPLE_DATA, "/iso_streets.geojson")
          ,layer = "/iso_streets.geojson" )
