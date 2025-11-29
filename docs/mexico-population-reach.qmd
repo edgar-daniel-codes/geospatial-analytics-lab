@@ -25,18 +25,14 @@ Consider the following scenario: you are a retail store entering the Mexican mar
 Please note that, for the sake of this experiment, we are ignoring geographical, political, legal and security constraints, which would otherwise be applicable for a more realistic approach.
 
 ```{r,echo=FALSE, warning=FALSE, message=FALSE}
-library(here)
 library(knitr)
 library(dplyr)
-library(foreign)
 library(tidyverse)
 library(lubridate)
 library(readr)
 library(maps)
 library(leaflet)
-library(lwgeom)
 library(leaflet.extras)
-library(h3jsr)
 
 
 
