@@ -5,6 +5,7 @@ project:
   output-dir: _site
 website:
   title: "Geospatial Analytics Lab"
+  site-url: "https://edgar-daniel-codes.github.io/geospatial-analytics-lab/"
   navbar:
     left:
       - text: "Home"
