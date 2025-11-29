@@ -207,8 +207,8 @@ Read the cleaned info
 ```{r}
 
 # Read the clean data 
-censo_sf <- st_read(paste0(PROC_DATA, CENSO_GEOJSON))
-cells_sf <- st_read(paste0(PROC_DATA, CELLS_GEOJSON))
+censo_sf <- st_read(paste0(PROC_DATA, CENSO_GEOJSON), quiet = TRUE)
+cells_sf <- st_read(paste0(PROC_DATA, CELLS_GEOJSON), quiet = TRUE)
 
 # Append cell geometry to aggregate and add entity column 
 cells_sf <- cells_sf |> 
@@ -245,7 +245,7 @@ Let's see how does the population density looks like in a map:
 
 ```{r}
 
-### Visualización --------------------------------------------------------------
+### Population clusters  --------------------------------------------------------------
 
 library(leaflet)
 
@@ -368,7 +368,6 @@ for(ent in sprintf("%02s",1:32)){
       filter(lon >= x - inside_radius,lon <= x + inside_radius
              , lat >= y - inside_radius,lat <= y + inside_radius) |>
       select(-c(lon, lat))  |>
-      st_set_crs(st_crs(mzns_shp)) 
     
     censo_sf_cell_aux <- censo_sf_cell_aux |>
     st_filter(st_buffer(cell_centroid, dist = inside_radius),
@@ -569,13 +568,14 @@ The algorithm for this part uses the same heuristic logic, employing the circula
 
 # We filter the CDMX data to focus on the area of interest 
 cdmx_cells_sf <- cells_sf |> filter(ENTIDAD == '09')
-
+cdmx_poly <- st_read(paste0(SAMPLE_DATA,SHP_CDMX))
+censo_sf <-  censo_sf |> st_set_crs(st_crs(mzns_shp))
 
 options(warn = -1) # Deactivate Warnings 
 
 MAX_ITERS <- 750 # Max iterations 
 EPS <- 0.5 # Epsilon
-EPS_DECAY <- 0.01 #   Epsilon decay
+EPS_DECAY <- 0.1 #   Epsilon decay
 MIN_EPS <- 0.05
 STORAGE_UNITS <- 7
 
@@ -584,7 +584,7 @@ opt_points <-  list()
 opt_cells  <- list()
 opt_values <- numeric()
 isochrones_list <- list()
-
+cvegeo_occupied <- list()
 
 # Value initiations 
 cells_visited <- c()
@@ -595,115 +595,141 @@ eps <- EPS
 values_hist <- c()
 covered_cvegeos <- c()
 
+
+
 start <- Sys.time()  
+
+# Get the city frontier 
+city_boundary <- st_union(st_geometry(cdmx_poly))
+# only allow centers at least D metres from the frontier
+D_min <- as.integer(inside_radius*0.3)
   
 # Generate ordeneate list of cells (by Population)
-cells_list <- cdmx_cells_sf |> 
+cells_list <- cdmx_cells_sf |>
+  mutate(
+    dist_border = as.numeric(st_distance(st_transform(geometry,st_crs(mzns_shp))
+                            , st_boundary(city_boundary)),
+                             by_element = TRUE)
+    ) |> 
     st_drop_geometry() |>
+  filter(dist_border > D_min) |>
     select(CELL, POBTOT)  |> arrange(desc(POBTOT)) |>
     distinct() |> pull(CELL) 
+
+MAX_ITERS <- min(MAX_ITERS,length(cells_list))
+
+while (iters < MAX_ITERS) {
   
-while(iters < MAX_ITERS){
-    
-  # Define if we explore or maximize instantly
-  eps <- max(MIN_EPS, eps-EPS_DECAY)
-  if(runif(1)<eps){ # Explore
-    current_cell <- sample(cells_list[],1)
-  } else{ # Maximize 
+  # Epsilon-greedy: explore vs exploit
+  eps <- max(MIN_EPS, eps - EPS_DECAY)
+  if (runif(1) < eps) {        # Explore
+    current_cell <- sample(cells_list, 1)
+  } else {                     # Exploit (best remaining)
     current_cell <- cells_list[1]
   }
-    
-  # Create a buffer for the selected cell and evaluate 
+  
+  # Main Loop
   try({
     cell_centroid <- cdmx_cells_sf |>
-    st_transform(st_crs(mzns_shp)) |>
-      filter(CELL == current_cell) |> st_centroid() 
+      filter(CELL == current_cell) |>
+      slice(1) |>              
+      st_transform(st_crs(mzns_shp)) |>
+      st_centroid()
+    
+    # Circular buffer 
+    point_buffer <- st_buffer(cell_centroid, dist = inside_radius)
     
     coords <- cell_centroid |> st_coordinates()
     x <- coords[,1]  
     y <- coords[,2]  
     
+    # Census polygons covered by this buffer and not already occupied
     censo_sf_cell_aux <- censo_sf |>
-      filter(lon >= x - inside_radius,lon <= x + inside_radius
-             , lat >= y - inside_radius,lat <= y + inside_radius
-             , !CVEGEO %in% covered_cvegeos) |>
-      select(-c(lon, lat))  |>
-      st_set_crs(st_crs(mzns_shp)) 
+      filter(lon >= x - inside_radius,lon <= x + inside_radius , 
+              lat >= y - inside_radius,lat <= y + inside_radius , 
+              !CVEGEO %in% covered_cvegeos
+             ) |>
+      st_filter(point_buffer$geometry, .predicate = st_covered_by) |> 
+      select(-c(lon, lat)) 
+
     
-    point_buffer <- st_buffer(cell_centroid, dist = inside_radius)
+    # Get value 
+    current_value <- censo_sf_cell_aux |>
+      st_drop_geometry() |>
+      pull(POBTOT) |>
+      sum(na.rm = TRUE)
     
-    censo_sf_cell_aux <- censo_sf_cell_aux |>
-    st_filter(point_buffer,
-                  .predicate = st_covered_by)
-    
-    
-    current_value <- censo_sf_cell_aux |> st_drop_geometry() |>
-      pull(POBTOT) |> sum()
-    
-    
-    if(iters>STORAGE_UNITS){
-      # If we improve the worst value 
-      if(current_value > min_value) {
-      
-      # Values update 
-      opt_points[[min_idx]] <- cell_centroid 
-      opt_values[min_idx] <- current_value 
-      opt_cells[[min_idx]] <- current_cell
-      isochrones_list[[min_idx]] <- point_buffer
-      
-      covered_cvegeo <-  censo_sf_cell_aux |> st_drop_geometry() |>
-      select(CVEGEO) |> unique() |> pull(CVEGEO)
-      
-      # Index update 
-      # redefine mins
-      min_value <- Inf
-      for (i in seq_along(opt_values)) {
-        val <- opt_values[i]
-        if (val < min_value) {
-          min_idx <- i
-          min_value <- val
+    # Compite if we have all storages assigned
+    if (iters > STORAGE_UNITS) {
+      # Replace worst if we improved it
+      if (current_value > min_value) {
+        
+        opt_points[[min_idx]] <- cell_centroid
+        opt_values[min_idx] <- current_value
+        opt_cells[[min_idx]] <- current_cell
+        isochrones_list[[min_idx]] <- point_buffer
+        cvegeo_occupied[[min_idx]] <- censo_sf_cell_aux |>
+          st_drop_geometry() |>
+          select(CVEGEO) |>
+          distinct() |>
+          pull(CVEGEO)
+        
+        covered_cvegeos <- c()
+        for(i in 1:STORAGE_UNITS){
+          covered_cvegeos <- c(covered_cvegeos, 
+            cvegeo_occupied[[i]]
+          )
+        }
+        
+        # Recompute worst 
+        min_value <- Inf
+        for (i in 1:STORAGE_UNITS) {
+          val <- opt_values[[i]]
+          if (val < min_value) {
+            min_idx <- i
+            min_value <- val
+          }
         }
       }
-      
-      } 
-    } else{
-      # If we have not elected yet 5 storage locations we just add them
-      opt_points[[iters]] <- cell_centroid 
-      opt_values[iters] <- current_value 
+    } else {
+      # Filling first slots
+      opt_points[[iters]] <- cell_centroid
+      opt_values[iters] <- current_value
       opt_cells[[iters]] <- current_cell
       isochrones_list[[iters]] <- point_buffer
+      cvegeo_occupied[[iters]] <- censo_sf_cell_aux |>
+        st_drop_geometry() |>
+        select(CVEGEO) |>
+        distinct() |>
+        pull(CVEGEO)
       
-      covered_cvegeo <-  censo_sf_cell_aux |> st_drop_geometry() |>
-      select(CVEGEO) |> unique() |> pull(CVEGEO)
+      covered_cvegeos <- c(covered_cvegeos, 
+            cvegeo_occupied[[iters]]
+          )
       
-      if(current_value > min_value) {
+      if (current_value > min_value) {
         min_value <- current_value
         min_idx <- iters
       }
-      
     }
-    
-    
-    
-    }, silent = TRUE)
+  }, silent = FALSE)
   
-    
-    
-    # Update lists 
-    cells_visited <- c(cells_visited,current_cell)
-    cells_list  <- cells_list[!cells_list %in% cells_visited]
-    covered_cvegeos <- c(covered_cvegeos, covered_cvegeo)
-    values_hist <- c(values_hist,sum(opt_values))
-    iters <- iters + 1
-    
-    cat("\rIter ", iters, " completed.")
-    
-  }
+  # Update lists and values  
+  cells_visited <- c(cells_visited, current_cell)
+  cells_list <- cells_list[!cells_list %in% cells_visited]
+  values_hist <- c(values_hist, sum(opt_values))
+  iters <- iters + 1
+  
+  cat("\rIter ", iters, " completed.")
+}
+
     
 end <- Sys.time()
 
 cat("\nLoop ended:  ", end - start ," (segs).")
 
+
+plot(values_hist)
 
 ```
 
@@ -711,7 +737,7 @@ Look out the optimal points in the city:
 
 ```{r}
 
-opt_points_sf <- do.call(rbind, opt_points)
+opt_points_sf <-  do.call(rbind, opt_points) 
 
 
 opt_points_sf |> 
@@ -722,9 +748,21 @@ opt_points_sf |>
     lat    = coords[,2]
   ) |>
   st_drop_geometry() |>
-  select(lng, lat) 
+  select(lng, lat) |> write_csv(paste0(SAMPLE_DATA, "/cdmx_final_points.csv"))
+
+POINT <- opt_points_sf |> 
+  st_transform(4326) |> 
+  mutate(
+    coords = st_coordinates(geometry),
+    lng    = coords[,1],
+    lat    = coords[,2]
+  ) |>
+  st_drop_geometry() |>
+  select(lng, lat) |>
+  st_as_sf(coords = c("lng", "lat"), crs = 4326)
 
 ```
+
 
 ### Conclusions and results 
 
@@ -734,9 +772,9 @@ CDMX coverage after apply the algorithm:
 
 ### Map ------------------------------------------------------------------------
 
-car_iso15 <- st_read(paste0(CLEAN_DATA,FINAL_ISO_CDMX_C))
-mb_iso15 <- st_read(paste0(CLEAN_DATA,FINAL_ISO_CDMX_M))
-cdmx_poly <- st_read(paste0(SAMPLE_DATA,SHP_CDMX))
+car_iso15 <- st_read(paste0(CLEAN_DATA,FINAL_ISO_CDMX_C), quiet = TRUE)
+mb_iso15 <- st_read(paste0(SAMPLE_DATA,FINAL_ISO_CDMX_M), quiet = TRUE)
+cdmx_poly <- st_read(paste0(SAMPLE_DATA,SHP_CDMX), quiet = TRUE)
 
 library(sf)
 library(dplyr)
@@ -756,22 +794,22 @@ pts       <- st_transform(opt_points_sf, 4326)
 
 # Color palette for population density 
 pal <- colorNumeric(
-  palette = c("#f2fff5","#c7f7d6","#8ae5a8","#34c277", "#007a3d"   
+  palette = c("#f2fff5","#c7f7d6","#34c277", "#007a3d"   
 ), 
   domain  = cells_cdmx$POBTOT,
   na.color = "transparent"
 )
 
-
 # Final map for CDMX isochrone coverage 
-m_pop <- leaflet(width="400",height = "500px", options = leafletOptions(minZoom = 9)) |>
+m_pop <- leaflet( options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
   addProviderTiles(providers$CartoDB.PositronNoLabels) |>
 
   # CDMX boundary
   addPolygons(
     data = poly_cdmx,
     color = "#2b2b2b", weight = 2,
-    fillOpacity = 0
+    fillOpacity = 0.1, 
+    fillColor = "gray"
   ) |>
   # Population H3 cells 
   addPolygons(
@@ -802,8 +840,7 @@ m_pop <- leaflet(width="400",height = "500px", options = leafletOptions(minZoom 
   position  = "bottomleft",
   labFormat = labelFormat(big.mark = ","),
   className = "small-legend"
-)
-
+) 
 
 m_pop
 
@@ -811,12 +848,12 @@ m_pop
 
 plot(values_hist)
 
-
-
-
 ```
 
 Apparently, the result from the algorithm shows good coverage of the limits of Mexico City. Let's evaluate it in terms of population to see if it really covers the maximum possible. 
+
+Lets see the general coverage for each municipality in terms of isochrones. 
+
 
 ```{r, warning=FALSE, message=FALSE}
 
@@ -879,49 +916,53 @@ cat("% Of population reached inside a 15 minutes isochrones", sprintf("%.2f ",(1
 
 ```
 
-Visualizations in general 
+We calculate some statistics about the area coverages in terms og geographical coverage:
+
 
 ```{r}
-
-### Visualización --------------------------------------------------------------
-
-library(leaflet)
-
-car_iso15 <- st_read(paste0(CLEAN_DATA,REFERENCE_ISO_CDMX_C))
-mb_iso15 <- st_read(paste0(CLEAN_DATA,REFERENCE_ISO_CDMX_M))
-
-
-pal <- colorNumeric(
-  palette = c("white", "darkblue"),   # use a color vector or palette name
-  domain = cells_sf$POBTOT
-)
-
- m <- leaflet() |>
-  addProviderTiles(providers$CartoDB.Positron) |>
-  addPolygons(
-    data = cdmx_cells_sf |> filter(ENTIDAD == '09'), 
-    color = "transparent",
-    weight = 1,
-    fillColor = ~pal(POBTOT),
-    fillOpacity = 0.5,
-    label = ~paste0("POBTOT: ", POBTOT),
-  )  
-
-for (i in seq_along(isochrones_list)) {
-  m <- m |> addPolygons(
-    data = isochrones_list[[i]] |> st_transform(crs = 4326),
-    color = "transparent",
-    weight = 1,
-    fillColor = "lightgreen",
-    fillOpacity = 0.5,
-    group = paste0("Isochrone_", i)
-  )
-}
-
-m
+# Polygon intersection 
+iso15_mp <-
+  st_intersection(
+    iso15 |> st_make_valid() |> mutate(id1 = row_number()) |> select(id1),
+    iso15 |> st_make_valid() |> mutate(id2 = row_number()) |> select(id2)
+  ) |>
+  # keep only *true* pairwise intersections (no self, no duplicates)
+  filter(id1 < id2, !st_is_empty(geometry)) |>
+  st_union() |>
+  st_cast("MULTIPOLYGON")
 
 
+# Calculate area statistics 
 
+sf_use_s2(FALSE)
+
+
+area_m2 <- st_area(geom_clean)  # vector of areas (m²)
+total_area_m2 <- as.numeric(st_area(st_union(geom_clean)))  # single total area
+
+
+area_cdmx <- st_area(poly_cdmx)        
+area_isos <- st_area(st_union(iso15 |> st_make_valid() ))   
+area_inter <- st_area(iso15_mp |> st_make_valid())  
+pop_area <- st_area(st_union(cdmx_cells_sf |> st_make_valid() ))
+
+poly_cdmx_v <- poly_cdmx |>
+  st_make_valid()
+
+iso15_v <- iso15 |>
+  st_make_valid() |>
+  st_transform(st_crs(poly_cdmx_v))   # only if needed
+
+# Union all iso15 polygons into one mask
+iso15_union <- st_union(iso15_v)
+
+# Intersection between CDMX and union of iso15
+inter_cdmx_iso15 <- st_intersection(poly_cdmx_v, iso15_union)
+
+# Percentage of CDMX covered
+pct_cdmx_covered <-
+  100 * as.numeric(st_area(inter_cdmx_iso15)) /
+        as.numeric(st_area(poly_cdmx_v))
 
 
 

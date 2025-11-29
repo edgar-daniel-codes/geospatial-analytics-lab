@@ -1,0 +1,14 @@
+{
+"type": "FeatureCollection",
+"name": "cleaniso_centroids_cdmx",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "CELL": "884995bb59fffff", "POBTOT": 11892.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.132932967088095, 19.387454129289662 ] } },
+{ "type": "Feature", "properties": { "CELL": "8849958e15fffff", "POBTOT": 31684.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.043008296266549, 19.316658409997462 ] } },
+{ "type": "Feature", "properties": { "CELL": "88499585c3fffff", "POBTOT": 8945.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.143260576407982, 19.332355151894507 ] } },
+{ "type": "Feature", "properties": { "CELL": "8849958ea7fffff", "POBTOT": 7802.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.042039930856816, 19.371029858750706 ] } },
+{ "type": "Feature", "properties": { "CELL": "884995b825fffff", "POBTOT": 11591.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.110102477587859, 19.466785487938907 ] } },
+{ "type": "Feature", "properties": { "CELL": "8849958491fffff", "POBTOT": 9626.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.22062441816945, 19.35751737419772 ] } },
+{ "type": "Feature", "properties": { "CELL": "884995baa7fffff", "POBTOT": 11052.0, "ENTIDAD": "09" }, "geometry": { "type": "Point", "coordinates": [ -99.181197240644693, 19.469183425519756 ] } }
+]
+}

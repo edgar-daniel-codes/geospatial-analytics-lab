@@ -13,8 +13,8 @@ Welcome to my Digital Geospatial Research Lab! The idea behind my personal geosp
 - [Isochrone Calculator](isochrones.qmd)  
   Compute travel-time catchment areas from an origin over a street network.
 
-- [Population Density Analysis](mexico-population-density.qmd)  
-  An analysis of how the population is distributed across urban communities in Mexico.
+- [Population Reach Analysis](mexico-population-reach.qmd)  
+  An analysis of how the population is distributed across urban communities in Mexico, and how much of this population can be covered by a 15 minutes isochrone by selecting strategic points. 
 
 ## Theory Notes
 
