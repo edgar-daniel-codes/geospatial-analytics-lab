@@ -44,6 +44,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install system dependencies for sf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libudunits2-dev \
+            libgdal-dev \
+            libgeos-dev \
+            libproj-dev \
+            gdal-bin \
+            proj-bin
+
+
       - name: Install R package dependencies
         run: |
           install.packages(c(
