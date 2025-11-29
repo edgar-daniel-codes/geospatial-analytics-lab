@@ -903,3 +903,5 @@ Overall, we can conclude that 67.94% of CDMX’s population can be reached withi
 As we can see from the map, the most populated area is in the northern part of the city. This is because the southern part of the city has forest and lake areas, which is why the population is concentrated in a few municipalities. We can take advantage of this situation by placing strategic points to ensure full coverage. The following table shows the coverage percentage by municipality. 
 
 ![Population coverage (%) by municipallity.](./images/dens_mx_coverages.png)
+
+Both Azcapotzalco and Benito Juárez have populations that are fully within our 90-minute reach. 
