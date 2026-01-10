@@ -1,0 +1,53 @@
+---
+title: "Population Density - Mexico"
+subtitle: "15 minutes reach"
+author: "Edgar Daniel"
+page-layout: article
+output: html_document
+---
+
+
+# Question: How many people can I reach in 15 minutes or less?
+
+In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+
+**Problem Statement**:
+
+Consider the following scenario: you are a retail store entering the Mexican market and developing an expansion plan for Mexico. The C-suite tells you that the strategy is to start by opening ten stores in the country, providing the following guidance:
+
+> 1.- You 
+> 
+> 2.- The objective 
+> 
+> 3.- You can 
+ 
+
+ ```{r,echo=FALSE, warning=FALSE, message=FALSE}
+library(knitr)
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(maps)
+library(leaflet)
+library(leaflet.extras)
+
+# Paths 
+SAMPLE_DATA <- "../data/sample"
+
+MARCOGEO_FOLDER <- "/marco_geo_2020" 
+CENSO_FOLDER <- "/mex_censo_2020" 
+
+CENSO_GEOJSON <-  "/inegi_censo_2020_urbageb.geojson"
+CELLS_GEOJSON <-  "/cells_censo_2020_urbageb.geojson"
+
+# Parameters
+H3_RESOLUTION <- 8
+
+```
+
+
+## Data Preparation 
+
+
+
