@@ -1,13 +1,13 @@
 ---
-title: "Population Density - Mexico"
-subtitle: "15 minutes reach"
+title: "Electric Vehicles Reach"
+subtitle: "How far can I travel in Mexico with my Tesla?"
 author: "Edgar Daniel"
 page-layout: article
 output: html_document
 ---
 
 
-# Question: How many people can I reach in 15 minutes or less?
+# Question: Going from Mexico City, how far can I go in a roadtrip using my Tesla and charging in the official charger network.
 
 In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
 
@@ -21,6 +21,17 @@ Consider the following scenario: you are a retail store entering the Mexican mar
 > 
 > 3.- You can 
  
+
+## Problem definition and theory
+
+
+### The problem itself 
+
+
+### The strategy 
+
+
+
 
  ```{r,echo=FALSE, warning=FALSE, message=FALSE}
 library(knitr)
