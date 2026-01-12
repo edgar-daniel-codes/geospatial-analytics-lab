@@ -1,4 +1,5 @@
-# app.py
+#!/usr/bin/env python3
+# tesla_charger_add_scrap.py
 
 ### Geospatial Analytics Lab
 ### Electric Vehicle Reach 
@@ -6,8 +7,7 @@
 
 
 ### ----------------------------------------------------------------------------
-### Libraies and Parameters ----------------------------------------------------
-
+### Libraries and Parameters ----------------------------------------------------
 
 
 # Needed libraries 
@@ -48,6 +48,14 @@ parser = argparse.ArgumentParser(
     description="Scraping code to get location data for both cargers and superchargers from official Tesla site. "
 )
 
+parser.add_argument(
+    "--output_file",
+    type=str,
+    required=True,
+    help="Output filename with coordinates for each charger/supercharger"
+)
+
+
 group = parser.add_mutually_exclusive_group(required=True)
 
 group.add_argument(
@@ -75,41 +83,7 @@ if args.country:
     print("Country:", args.country)
     print("Links (Infered) :", URL_CHARGERS, URL_SUPERCHARGERS)
 
-# Google Maps API
-API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-if not API_KEY:
-    raise RuntimeError("GOOGLE_MAPS_API_KEY not set")
-
-
-
-
-### ----------------------------------------------------------------------------
-### Auxiliar Functions ---------------------------------------------------------
-
-
-def get_coordinates(address: str, api_key: str):
-    
-    """
-    Given a text address, return (latitude, longitude)
-    using Google Maps Geocoding API
-    """
-
-    url = "https://maps.googleapis.com/maps/api/geocode/json"
-    params = {
-        "address": address,
-        "key": api_key
-    }
-
-    response = requests.get(url, params=params, timeout=10)
-    data = response.json()
-
-    if data["status"] != "OK":
-        return None, None
-
-    location = data["results"][0]["geometry"]["location"]
-    return location["lat"], location["lng"]
-
-
+output_file = args.output_file
 
 
 ### ----------------------------------------------------------------------------
@@ -255,10 +229,6 @@ driver.quit()
 df_superchargers = pd.DataFrame(results)
 
 
-### ----------------------------------------------------------------------------
-### Address Geocoding  ---------------------------------------------------------
-
-
 # Unify both DataFrames
 
 df_chargers["charger_type"] = "charger"
@@ -269,8 +239,6 @@ df = pd.concat([df_chargers, df_superchargers])
 del df_chargers
 del df_superchargers
 
-# Call the API 
-df[["lat", "lon"]] = df["description"].apply(
-    lambda x: pd.Series(get_coordinates(x, API_KEY))
-)
+df.to_csv(output_file, index = False)
+
 
