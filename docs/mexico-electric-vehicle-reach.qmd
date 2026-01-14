@@ -9,20 +9,25 @@ output: html_document
 
 # Question: Going from Mexico City, how far can I go in a roadtrip using my Tesla and charging in the official charger network.
 
-In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+In this report we try to identify the towns and cities that are reachable using and electric car based on public data about  batery charging times, time budget constraints, averge distance per kW , and considering the following assumptions:
 
 **Problem Statement**:
 
-Consider the following scenario: you are a retail store entering the Mexican market and developing an expansion plan for Mexico. The C-suite tells you that the strategy is to start by opening ten stores in the country, providing the following guidance:
+Consider the following scenario:  you want to decide where can you go to vacation on your Tesla by charging just in the official carger spots across the countrty and using the available roads. 
 
-> 1.- You 
+> 1.- The start point is in the center of Mexico City with a fully charged car. 
 > 
-> 2.- The objective 
+> 2.- For cities and towns where there are a charger/super-charger, it is assumed that we can travel the whole city/town.
 > 
-> 3.- You can 
- 
+> 3.- For the cities and towns whithout charger/super-charger in order to say that is reacheable, the vehicle should have enough battery to get to the nearest point on the town next to the road, and for the return/ travel to the closest charger, remaining at the end a 5%  battery margen. 
+> 
+> 4.- For the road network we use the official Mexico INEGI's Red Nacional de Caminos (National Road Network). 
+> 
+> 5.- The carger are obtained from the official Tesla web Sites. 
+
 
 ## Problem definition and theory
+
 
 
 ### The problem itself 
