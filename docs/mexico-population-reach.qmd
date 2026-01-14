@@ -72,9 +72,31 @@ H3_RESOLUTION <- 8
 
 ## Data Preparation 
 
-In this notebook, we explore the task of creating a list of points on the map. Apart from this, we seek to place them in such a way that the number of people within the 15-minute isochrone from each point is maximised for a given transport time.
+We use a python code with Selenium to get the data of all charger direction from the official [Tesla site](https://www.tesla.com/es_mx/findus/list/chargers/Mexico)
 
-First the census data: 
+```python
+
+
+
+```
+
+
+nowwe get the official geographic information from Mexico INEGI's National Road Network (Red Nacional de Caminos, from spanish). 
+
+``` bash
+
+# Download zip ( ~660 Mb)
+wget "https://www.inegi.org.mx/contenidos/productos/prod_serv/contenidos/espanol/bvinegi/productos/geografia/caminos/2024/794551132166_s.zip" -O ./data/raw/rnc_2024.zip
+
+# Unzip files
+unzip -o ./data/raw/rnc_2024.zip -d ./data/raw/nat_road_net_mex
+
+# Remove ZIP file 
+rm ./data/raw/rnc_2024.zip
+
+```
+
+
 
 ```r
 ### Data ---------------------------------------------------------------------
