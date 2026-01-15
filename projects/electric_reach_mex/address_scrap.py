@@ -58,28 +58,80 @@ input_file = args.input_file
 output_file = args.output_file
 
 
+# OSM Mail 
+EMAIL = os.getenv("OSM_EMAIL")
+if not EMAIL:
+    raise RuntimeError("OSM_EMAIL not set")
+
 
 ### ----------------------------------------------------------------------------
-### Web Scrapping  -------------------------------------------------------------
+### Auxiliar Functions  --------------------------------------------------------
 
-## Chargers 
 
 # Auxiliar function to mimic human waiting times 
 def human_sleep(a=0.8, b=2.3):
     time.sleep(random.uniform(a, b))
 
 
+# Auxiliar function to get coordinates 
+def get_coordinates_nominatim(address: str, email: str):
+    """
+    Given a text address, return (lat, lon) using Nominatim (OpenStreetMap)
+    """
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1
+    }
+
+    headers = {
+        "User-Agent": f"your-app-name/1.0 ({email})"
+    }
+
+    response = requests.get(url, params=params, headers=headers, timeout=10)
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not data:
+        return None, None
+
+    return float(data[0]["lat"]), float(data[0]["lon"])
+
+
+
+### ----------------------------------------------------------------------------
+### Web Scrapping  -------------------------------------------------------------
+
+
 # Get df data 
 df = pd.read_csv(input_file)
 
+
+df[["lat", "lon"]] = df["description"].apply(
+            lambda x: pd.Series(
+                get_coordinates_nominatim(x, EMAIL)
+                )
+        )
+
+
+# Separete the ones with coords and without 
+df_pend = df[df.lon.isna()]
+df_nopen= df.dropna(subset=['lon'])
+
+
 # List of references 
-hrefs = df.charger_href.drop_duplicates().to_list()
+hrefs = df_pend.charger_href.to_list()
+desc = df_pend.charger_href.to_list()
 
 # Results list init 
 results = []
 
+failed_count = 0
+
 # Link open loops 
-for url in hrefs:
+for url, d in zip(hrefs, desc):
 
     # Anti bot detection configurration 
     options = uc.ChromeOptions()
@@ -121,12 +173,17 @@ for url in hrefs:
         # Transorm text into float 
         coords = [float(x) for x in new_window_url.split(",")]
         lat, lon = coords[0], coords[1]
+        failed_count = 0
 
         print(f"Coordinate process completed for {url}. ")
 
     except Exception as e:
         lat, lon = 0.0, 0.0
+        failed_count +=1
         print(f"Coordinate process failed for {url}. ")
+
+    if failed_count > 10:
+        break
 
     # Append extraction results if any 
     results.append({
@@ -141,9 +198,16 @@ for url in hrefs:
 df_coords = pd.DataFrame(results)
 
 # Final DataFrame
-df = df.merge(
+df_pend = (
+    df_pend
+    .drop(columns=['lat', 'lon'])
+    .merge(
     df_coords, on = "charger_href", how = "left"
-)
+    )
+    .dropna()
+    )
+
+df = pd.concat([df_nopen, df_pend])
 
 # Save into file 
 df.to_csv(output_file, index = False)
