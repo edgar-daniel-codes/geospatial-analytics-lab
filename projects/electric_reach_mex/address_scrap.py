@@ -52,6 +52,8 @@ parser.add_argument(
     help="Output filename with coordinates for each charger/supercharger"
 )
 
+args = parser.parse_args()
+
 input_file = args.input_file
 output_file = args.output_file
 
@@ -67,15 +69,6 @@ def human_sleep(a=0.8, b=2.3):
     time.sleep(random.uniform(a, b))
 
 
-# Anti bot detection configurration 
-options = uc.ChromeOptions()
-options.add_argument("--start-maximized")
-options.add_argument("--disable-blink-features=AutomationControlled")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.binary_location = "/usr/bin/google-chrome"
-
-
 # Get df data 
 df = pd.read_csv(input_file)
 
@@ -88,22 +81,25 @@ results = []
 # Link open loops 
 for url in hrefs:
 
+    # Anti bot detection configurration 
+    options = uc.ChromeOptions()
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.binary_location = "/usr/bin/google-chrome"
+
     # Call the driver 
     driver = uc.Chrome(options=options)
     wait = WebDriverWait(driver, 25)
 
     try:
-        
-
         driver.get(url)
 
         original_window = driver.current_window_handle
 
-
-        human_sleep(3, 4)
-
-        button = driver.find_element(By.CSS_SELECTOR, "button[class*='tds-btn']")
-
+        human_sleep(3, 4) 
+        button = driver.find_element(By.CSS_SELECTOR, "button[class*='tds-btn']") 
         button.click()
 
         WebDriverWait(driver, 10).until(
@@ -124,12 +120,13 @@ for url in hrefs:
 
         # Transorm text into float 
         coords = [float(x) for x in new_window_url.split(",")]
-        lat, lon = coords[0],coords[1]
+        lat, lon = coords[0], coords[1]
 
         print(f"Coordinate process completed for {url}. ")
 
     except Exception as e:
-        lat, lon = 0.0,0.0
+        lat, lon = 0.0, 0.0
+        print(f"Coordinate process failed for {url}. ")
 
     # Append extraction results if any 
     results.append({
@@ -138,12 +135,10 @@ for url in hrefs:
             "lon": lon ,
         })
 
-    print(f"Coordinate process failed for {url}. ")
-
     driver.quit()
 
 # Results DataFrame
-df_coords = pd.DataFrame()
+df_coords = pd.DataFrame(results)
 
 # Final DataFrame
 df = df.merge(
