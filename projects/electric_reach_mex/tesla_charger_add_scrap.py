@@ -13,25 +13,15 @@
 # Needed libraries 
 
 # Web Scrapping 
-from selenium import webdriver
+import random
+import time
+import undetected_chromedriver as uc
+
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.actions.action_builder import ActionBuilder
-from selenium.webdriver.common.actions.key_input import KeyInput
-from selenium.webdriver.common.actions.pointer_input import PointerInput
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-
 
 # System requiremenmts 
-import time
-import random
 import datetime as dt
 import argparse
 import requests
@@ -90,70 +80,96 @@ output_file = args.output_file
 ### Web Scrapping  -------------------------------------------------------------
 
 ## Chargers 
+
+
+def human_sleep(a=0.8, b=2.3):
+    time.sleep(random.uniform(a, b))
+
+
 options = uc.ChromeOptions()
 options.add_argument("--start-maximized")
-
-# Invoke driver object 
-
-driver = webdriver.Chrome(options=options)
-wait = WebDriverWait(driver, 15)
-actions = ActionChains(driver)
-keyboard = KeyInput("keyboard")
-actions_b = ActionBuilder(driver, keyboard=keyboard)
+options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.binary_location = "/usr/bin/google-chrome"
 
 
-
-# Open Main page
 driver = uc.Chrome(options=options)
-wait = WebDriverWait(driver, 20)
+wait = WebDriverWait(driver, 25)
 
 driver.get(URL_CHARGERS)
-time.sleep(3)
 
-# Look for data items 
-items =  driver.find_elements(
+# Wait for main container to load
+wait.until(
+    EC.presence_of_element_located(
+        (By.CSS_SELECTOR, "div[class*='subregions_page_locations_container']")
+    )
+)
+
+human_sleep(2, 4)
+
+items = driver.find_elements(
     By.CSS_SELECTOR,
     "div[class*='subregions_page_locations_container'] > div"
 )
-time.sleep(random.uniform(7,10))
-
-
 
 results = []
 
 for container in items:
     try:
-        container_data = container.find_elements(
+        locations = container.find_elements(
             By.CSS_SELECTOR, "div[class*='subregion_location_data']"
         )
     except Exception:
         continue
 
-    for location in container_data:
+    for location in locations:
+        human_sleep(0.4, 1.1)
+
+        # Location name
         try:
             location_label = location.find_element(
                 By.CSS_SELECTOR, "div[class*='subregion_location_title']"
             ).text.strip()
+            print("Location label extraction succeed.", end= "\r")
         except Exception:
+            print("Location label extraction failed.", end= "\r")
             location_label = ""
 
+        # Charger link (FIXED)
         try:
-            description_elements = location.find_elements(
-                By.CSS_SELECTOR, "div[class*='subregion_location_addressLine1']"
+            link_el = location.find_element(
+                By.CSS_SELECTOR, "a[href]"
+            )
+            charger_href = link_el.get_attribute("href")
+            print("Address extraction succeed.", end= "\r")
+        except Exception:
+            print("Link extraction failed.", end= "\r")
+            charger_href = ""
+
+        # Address
+        try:
+            address_elements = location.find_elements(
+                By.CSS_SELECTOR,
+                "div[class*='subregion_location_addressLine1']"
             )
             address = ", ".join(
-                el.text.strip() for el in description_elements if el.text.strip()
+                el.text.strip() for el in address_elements if el.text.strip()
             )
+            print("Address extraction succeed.", end= "\r")
         except Exception:
+            print("Address extraction failed.", end= "\r")
             address = ""
 
         results.append({
             "location_label": location_label,
             "description": address,
+            "charger_href": charger_href,
         })
 
-
+human_sleep(3, 5)
 driver.quit()
+
 df_chargers = pd.DataFrame(results)
 
 
@@ -161,70 +177,89 @@ df_chargers = pd.DataFrame(results)
 
 ## Super - Chargers 
 
-## Chargers 
 options = uc.ChromeOptions()
 options.add_argument("--start-maximized")
+options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
-# Invoke driver object 
-
-driver = webdriver.Chrome(options=options)
-wait = WebDriverWait(driver, 15)
-actions = ActionChains(driver)
-keyboard = KeyInput("keyboard")
-actions_b = ActionBuilder(driver, keyboard=keyboard)
-
-
-
-# Open Main page
 driver = uc.Chrome(options=options)
-wait = WebDriverWait(driver, 20)
+wait = WebDriverWait(driver, 25)
 
-driver.get(URL_SUPERCHARGERS)
-time.sleep(3)
+driver.get(URL_CHARGERS)
 
-# Look for data items 
-items =  driver.find_elements(
+# Wait for main container to load
+wait.until(
+    EC.presence_of_element_located(
+        (By.CSS_SELECTOR, "div[class*='subregions_page_locations_container']")
+    )
+)
+
+human_sleep(2, 4)
+
+items = driver.find_elements(
     By.CSS_SELECTOR,
     "div[class*='subregions_page_locations_container'] > div"
 )
-time.sleep(random.uniform(7,10))
-
-
 
 results = []
 
 for container in items:
     try:
-        container_data = container.find_elements(
+        locations = container.find_elements(
             By.CSS_SELECTOR, "div[class*='subregion_location_data']"
         )
+        print("Location extraction succeed.", end= "\r")
     except Exception:
+        print("Location extraction failed.", end= "\r")
         continue
 
-    for location in container_data:
+    for location in locations:
+        human_sleep(0.4, 1.1)
+
+        # Location name
         try:
             location_label = location.find_element(
                 By.CSS_SELECTOR, "div[class*='subregion_location_title']"
             ).text.strip()
+            print("Location label extraction succeed.", end= "\r")
         except Exception:
+            print("Location label extraction failed.", end= "\r")
             location_label = ""
 
+        # Charger link (FIXED)
         try:
-            description_elements = location.find_elements(
-                By.CSS_SELECTOR, "div[class*='subregion_location_addressLine1']"
+            link_el = location.find_element(
+                By.CSS_SELECTOR, "a[href]"
+            )
+            print("Link extraction succeed.", end= "\r")
+            charger_href = link_el.get_attribute("href")
+        except Exception:
+            print("Link extraction failed.", end= "\r")
+            charger_href = ""
+
+        # Address
+        try:
+            address_elements = location.find_elements(
+                By.CSS_SELECTOR,
+                "div[class*='subregion_location_addressLine1']"
             )
             address = ", ".join(
-                el.text.strip() for el in description_elements if el.text.strip()
+                el.text.strip() for el in address_elements if el.text.strip()
             )
+
+            print("Address extraction succeed.", end= "\r")
         except Exception:
+            print("Address extraction failed.", end= "\r")
             address = ""
 
         results.append({
             "location_label": location_label,
             "description": address,
+            "charger_href": charger_href,
         })
 
-
+human_sleep(3, 5)
 driver.quit()
 df_superchargers = pd.DataFrame(results)
 
