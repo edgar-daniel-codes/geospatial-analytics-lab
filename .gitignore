@@ -56,6 +56,7 @@ node_modules/
 !.yarn/versions
 
 
+
 # JAVA-Scala
 target/
 *.class
@@ -232,3 +233,5 @@ docs/*.tmp
 # Keepers
 .gitkeep
 
+# Drafts and notebooks 
+notebooks/*

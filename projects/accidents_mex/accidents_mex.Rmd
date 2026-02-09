@@ -1,0 +1,112 @@
+---
+title: "Population Pyramid - Mexico"
+subtitle: "Age by sex and region"
+author: "Edgar Daniel"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question: What is the median age by sex and region? 
+
+Description ... 
+
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+library(foreign)
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(sp)
+library(pracma)
+library(R.utils)
+library(geosphere)
+library(sf)
+library(rvest)
+library(rjson)
+library(RCurl)
+library(bayesbio)
+library(stringdist)
+library(maps)
+library(leaflet)
+library(lwgeom)
+library(leaflet.extras)
+library(h3jsr)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths 
+RAW_DATA <- here("data", "raw")
+CLEAN_DATA <- here("data", "clean")
+PROC_DATA <- here("data", "processed")
+SAMPLE_DATA <- here("data", "sample")
+CODE <- here("lib")
+
+ACCIDENTS_FOLDER <- "/accidents_mex/atus_2024_shp/conjunto_de_datos/" 
+ACCIDENTS_FILE <- "BASE_MUNICIPAL_ACCIDENTES_GEORREFERENCIADOS_2024.shp"
+
+SHP_CDMX <- "/09ent.shp"
+
+#source(paste0(CODE, "/isochrone.R"))
+
+# Parameters
+H3_RESOLUTION <- 8
+
+
+```
+
+
+## Exploratory Data Analysis 
+
+We load the required data: Mexico City Population and Manzana level polygons. 
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+df_accidents  <- st_read(paste0(RAW_DATA, ACCIDENTS_FOLDER, ACCIDENTS_FILE), quiet = TRUE)
+
+
+```
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+## Data TRransformations and filters 
+
+df_accidents <- df_accidents |>
+  # Just CDMX
+  filter(EDO == 9) |>
+  # Select columns 
+  select(ID, ANIO, MES, DIA, HORA, MINUTOS, DIASEMANA, TIPACCID, AUTOMOVIL, SEXO, ALIENTO, CINTURON, EDAD, TOTMUERTOS, TOTHERIDOS, CLASE, LATITUD, LONGITUD)
+
+```
+
+
+```{r}
+
+leaflet(df_accidents) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    lng = ~LONGITUD,
+    lat = ~LATITUD,
+    radius = 4,
+    stroke = FALSE,
+    fillOpacity = 0.7,
+    color = "#d73027",
+    popup = ~paste0(
+      "<b>Accident</b><br/>",
+      if ("date" %in% names(df_accidents)) paste0("Date: ", date, "<br/>") else "",
+      if ("severity" %in% names(df_accidents)) paste0("Severity: ", severity) else ""
+    )
+  )
+
+```

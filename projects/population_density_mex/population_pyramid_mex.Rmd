@@ -1,0 +1,250 @@
+---
+title: "Population Pyramid - Mexico"
+subtitle: "Age by sex and region"
+author: "Edgar Daniel"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question: What is the median age by sex and region? 
+
+Description ... 
+
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+library(foreign)
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(sp)
+library(pracma)
+library(R.utils)
+library(geosphere)
+library(sf)
+library(rvest)
+library(rjson)
+library(RCurl)
+library(bayesbio)
+library(stringdist)
+library(maps)
+library(leaflet)
+library(lwgeom)
+library(leaflet.extras)
+library(h3jsr)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths 
+RAW_DATA <- here("data", "raw")
+CLEAN_DATA <- here("data", "clean")
+PROC_DATA <- here("data", "processed")
+SAMPLE_DATA <- here("data", "sample")
+CODE <- here("lib")
+
+MARCOGEO_FOLDER <- "/marco_geo_2020/" 
+CENSO_FOLDER <- "/mex_censo_2020/" 
+
+CENSO_FILE <- "RESAGEBURB_09_2020_csv/RESAGEBURB_09CSV20.csv"
+MARCO_FILE <- "09_ciudaddemexico/conjunto_de_datos/09m.shp"
+
+SHP_CDMX <- "/09ent.shp"
+
+#source(paste0(CODE, "/isochrone.R"))
+
+# Parameters
+H3_RESOLUTION <- 8
+
+
+```
+
+
+## Exploratory Data Analysis 
+
+We load the required data: Mexico City Population and Manzana level polygons. 
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+df_censo <- read_csv(file=paste0(RAW_DATA,CENSO_FOLDER, CENSO_FILE) )
+df_mznas  <- st_read(paste0(RAW_DATA, MARCOGEO_FOLDER, MARCO_FILE), quiet = TRUE)
+
+
+```
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+## Data TRransformations and filters 
+
+# Create CVEGEO for census
+df_censo <- df_censo |> 
+  mutate(
+    CVEGEO = paste0(ENTIDAD,MUN,LOC,AGEB,MZA)
+  ) 
+
+# Left Join 
+df <- df_mznas |> left_join(
+  df_censo , by = "CVEGEO"
+) 
+
+# Filter just the data that interest us 
+df <- df |>
+      # Just CDMX 
+      filter(CVE_ENT == '09') |>
+      # Non -aggregated values 
+      filter(MZA != '00') |>
+      # Censured Data
+      filter(POBMAS != '*' & POBFEM != '*') |>
+      filter(POBMAS != '0' & POBFEM != '0') |>
+      filter(P_60YMAS != '*') |>
+      filter(P_60YMAS != '0') |>
+      # Select columns of interest
+      select(CVEGEO, MZA, POBTOT, POBFEM, POBMAS,P_60YMAS)  |>
+      # Variable Transformations 
+      mutate(
+        POBMAS = as.numeric(POBMAS),
+        POBFEM = as.numeric(POBFEM),
+        P_60YMAS = as.numeric(P_60YMAS),
+        WpM_rate = POBFEM/POBMAS,
+        W_per = POBFEM/POBTOT
+      )
+    
+
+
+head(df)
+
+```
+```{r}
+
+pal <- colorNumeric(
+  palette = c("white", "darkblue"),   # use a color vector or palette name
+  domain = df$P_60YMAS
+)
+
+leaflet(df |> st_transform(4326)) |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  addPolygons(
+    color = "transparent",
+    weight = 1,
+    fillColor = ~pal(P_60YMAS),
+    fillOpacity = 0.9,
+    label = ~paste0("POBTOT: ", P_60YMAS),
+    group = "Total Pob"
+  )
+
+```
+
+
+Poblation Pyramid 
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(scales)
+
+# df: your data.frame (one row per geography). Filter if needed.
+df1 <- df_censo |> slice(1)
+
+# Cleanning 
+pop_cols <- c(
+  "POBTOT", "POBFEM", "POBMAS",
+  "P_0A2_F","P_0A2_M",
+  "P_3A5_F","P_3A5_M",
+  "P_6A11_F","P_6A11_M",
+  "P_12A14_F","P_12A14_M",
+  "P_15A17_F","P_15A17_M",
+  "P_18A24_F","P_18A24_M",
+  "P_60YMAS_F","P_60YMAS_M"
+)
+
+df1 <- df1 |>
+  mutate(across(all_of(pop_cols), ~ as.numeric(str_replace_all(as.character(.), "\\*", "0"))))
+
+
+# Infering range 25-59 from data
+df1 <- df1 |>
+  mutate(
+    P_25A59_F = pmax(
+      0,
+      POBFEM - (P_0A2_F + P_3A5_F + P_6A11_F + P_12A14_F + P_15A17_F + P_18A24_F + P_60YMAS_F)
+    ),
+    P_25A59_M = pmax(
+      0,
+      POBMAS - (P_0A2_M + P_3A5_M + P_6A11_M + P_12A14_M + P_15A17_M + P_18A24_M + P_60YMAS_M)
+    )
+  )
+
+# Pyramid Data
+
+age_bins <- c("P_0A2","P_3A5","P_6A11","P_12A14","P_15A17","P_18A24","P_25A59","P_60YMAS")
+cols_keep <- c(paste0(age_bins, "_F"), paste0(age_bins, "_M"))
+
+pyr <- df1 |>
+  select(all_of(c("POBTOT", cols_keep))) |>
+  pivot_longer(cols = all_of(cols_keep), names_to = "var", values_to = "n") |>
+  mutate(
+    sex = if_else(str_ends(var, "_F"), "Feminine", "Masculine"),
+    age = str_remove(var, "_[FM]$"),
+    age = factor(age, levels = age_bins),
+    n = as.numeric(n)
+  )
+
+# Plot as % of total
+pyr <- pyr |>
+  mutate(
+    value = 100 * n / POBTOT,
+    y = if_else(sex == "Feminine", -value, value),
+    label = sprintf("%.1f%%", value)
+  )
+
+age_labels <- c(
+  P_0A2 = "0–2",
+  P_3A5 = "3–5",
+  P_6A11 = "6–11",
+  P_12A14 = "12–14",
+  P_15A17 = "15–17",
+  P_18A24 = "18–24",
+  P_25A59 = "25–59",
+  P_60YMAS = "60+"
+)
+
+# Plot
+ggplot(pyr, aes(x = age, y = y, fill = sex)) +
+  geom_col(width = 0.85) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 3,
+    show.legend = FALSE
+  ) +
+  coord_flip() +
+  scale_x_discrete(labels = age_labels) +
+  scale_y_continuous(
+    labels = function(x) paste0(abs(x), "%"),
+    breaks = pretty_breaks(6)
+  ) +
+  labs(
+    x = "Age group",
+    y = "% of total population",
+    fill = NULL,
+    title = "Population pyramid"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank()
+  )
+
+
+```
