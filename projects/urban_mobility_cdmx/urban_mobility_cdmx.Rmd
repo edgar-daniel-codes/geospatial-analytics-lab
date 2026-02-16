@@ -1,0 +1,73 @@
+---
+title: "Urban Mobility - CDMX"
+author: "Edgar Daniel"
+page-layout: article
+---
+
+
+# Urban Mobility 
+
+In the present article, we understand as Urban Mobility the join infrastructure in terms of public transportation thats is available in the city in order to understand how this blueprints interacts with the populated area of the city as well as strategic places in order to understan how people can move between places using uniquely this transportation infrastructure. 
+
+```{r, echo = FALSE, warning=FALSE}
+
+### Needed Libraries 
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(leaflet)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths to project root
+RAW_DATA <- here("data", "raw", "urban_mobility_cdmx")
+SAMPLE_DATA <- here("data", "sample")
+CODE <- here("lib")
+
+
+### Parameters  
+
+# City boundaries 
+CITY_SHP_DIR <- here("data", "raw", "marco_geo_2025")
+SHP_DIRECTORY <- "/09_ciudaddemexico/conjunto_de_datos/"
+SHP_FILE_C <- "09e.shp"
+CRS_MX <- 32614
+
+
+# Stations Files 
+SHP_FILE_STATION_ECOBICI = "/cicloestaciones_ecobici/cicloestaciones_ecobici.shp"
+SHP_FILE_STATION_METROBUS = "/mb_shp/Metrobus_estaciones.shp"
+SHP_FILE_STATION_METRO = "/stcmetro_shp/STC_Metro_estaciones_utm14n.shp"
+SHP_FILE_STATION_RTP = "/rtp_shp/RTP_paradas.shp"
+
+
+# Line Files 
+
+
+
+# Rout files 
+
+
+
+```
+
+
+**Problem Statement**:
+
+Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
+
+
+## Data Preparation 
+
+The following approach was used to prepare the data: Using INEGI's 2020 Geostatistical Framework, the Mexico City street file was filtered by the relevant municipality. Based on this filter, an auto-intersection was applied to obtain the corners corresponding to the municipality's roads. 
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+df_metro <- 
+
+```
+

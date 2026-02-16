@@ -1,0 +1,51 @@
+---
+title: "Isochrones calculator"
+author: "Edgar Daniel"
+page-layout: article
+---
+
+
+# Isochrones 
+
+In geospatial analysis, one of the most important issues is identifying objects of interest that are within range of a given point. Think of all the cell phones that can be reached by an antenna, all the medical centers around a point in the city, and all the competitors near a store. For most of these problems, the most immediate solution is to define the range from a point in terms of distance. It is usually assumed to be Euclidean, but care must be taken because in geospatial analysis we work with projections.
+
+```{r, echo = FALSE, warning=FALSE}
+library(here)
+library(knitr)
+library(dplyr)
+
+# Ensure chunks use project root
+opts_knit$set(root.dir = here::here())
+
+# Paths to project root
+RAW_DATA <- here("data", "raw", "marco_geo_2020")
+SAMPLE_DATA <- here("data", "sample")
+CODE <- here("lib")
+
+source(paste0(CODE, "/isochrone.R"))
+
+# Parametros 
+SHP_DIRECTORY <- "/09_ciudaddemexico/conjunto_de_datos/"
+SHP_FILE_C <- "09e.shp"
+CRS_MX <- 32614
+```
+
+
+**Problem Statement**:
+
+Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
+
+
+## Data Preparation 
+
+The following approach was used to prepare the data: Using INEGI's 2020 Geostatistical Framework, the Mexico City street file was filtered by the relevant municipality. Based on this filter, an auto-intersection was applied to obtain the corners corresponding to the municipality's roads. 
+
+
+
+```{r}
+### Data ---------------------------------------------------------------------
+
+
+
+```
+
