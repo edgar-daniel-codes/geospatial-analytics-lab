@@ -1,0 +1,15 @@
+---
+title: "Population Pyramid - Mexico"
+subtitle: "Ages by zone, sex and demographic."
+author: "Edgar Daniel"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question: How many people are and what the median age is in each region?
+
+

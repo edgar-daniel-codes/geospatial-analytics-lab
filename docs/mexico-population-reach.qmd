@@ -183,7 +183,7 @@ censo_sf <- censo_sf |>
 agg_cell <- censo_sf |>
   group_by(CELL) |> 
   summarise(
-    POBTOT = sum(POBTOT, na.rm = TRUE),
+    POBTOT = sum(Pdata/experiments/cdmx_bjOBTOT, na.rm = TRUE),
     .groups = "drop"
   ) 
 
