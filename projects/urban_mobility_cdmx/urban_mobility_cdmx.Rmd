@@ -16,6 +16,9 @@ library(tidyverse)
 library(knitr)
 library(dplyr)
 library(leaflet)
+library(here)
+library(sf)
+
 
 # Ensure chunks use project root
 opts_knit$set(root.dir = here::here())
@@ -29,9 +32,9 @@ CODE <- here("lib")
 ### Parameters  
 
 # City boundaries 
-CITY_SHP_DIR <- here("data", "raw", "marco_geo_2025")
+CITY_SHP_DIR <- here("data", "raw", "marco_geo_2020")
 SHP_DIRECTORY <- "/09_ciudaddemexico/conjunto_de_datos/"
-SHP_FILE_C <- "09e.shp"
+SHP_FILE_C <- "09ent.shp"
 CRS_MX <- 32614
 
 
@@ -40,6 +43,9 @@ SHP_FILE_STATION_ECOBICI = "/cicloestaciones_ecobici/cicloestaciones_ecobici.shp
 SHP_FILE_STATION_METROBUS = "/mb_shp/Metrobus_estaciones.shp"
 SHP_FILE_STATION_METRO = "/stcmetro_shp/STC_Metro_estaciones_utm14n.shp"
 SHP_FILE_STATION_RTP = "/rtp_shp/RTP_paradas.shp"
+SHP_FILE_STATION_CABLEBUS = "/ste_shp/ste_cablebus_shp/STE_Cablebus_estaciones.shp"
+SHP_FILE_STATION_TRENL = "/ste_shp/ste_tren_ligero_shp/STE_TrenLigero_estaciones_utm14n.shp"
+SHP_FILE_STATION_TROLEBUS = "/ste_shp/ste_trolebus_shp/STE_Trolebus_Paradas.shp"
 
 
 # Line Files 
@@ -67,7 +73,69 @@ The following approach was used to prepare the data: Using INEGI's 2020 Geostati
 ```{r}
 ### Data ---------------------------------------------------------------------
 
-df_metro <- 
+## City file 
+df_boundary = st_read(paste0(CITY_SHP_DIR, SHP_DIRECTORY, SHP_FILE_C))
+
+## Read file data 
+df_metro <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METRO))
+df_metrobus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METROBUS))
+#df_ecobici <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_ECOBICI))
+#df_rtp <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_RTP))
+#df_cablebus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_CABLEBUS))
+#df_trenl <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_TRENL))
+#df_trolebus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_TROLEBUS))
+
+
+
+## Transformations 
+df_metro <- st_zm(df_metro, drop = TRUE, what = "ZM")
+df_metro <- st_transform(df_metro, 4326)
+df_metrobus <- st_zm(df_metrobus, drop = TRUE, what = "ZM")
+df_metrobus <- st_transform(df_metrobus, 4326)
+
+
 
 ```
+```{r}
+
+
+
+# Final map for CDMX isochrone coverage 
+map_mob <- leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
+  addProviderTiles(providers$CartoDB.PositronNoLabels) |>
+
+  # CDMX boundary
+  addPolygons(
+    data = df_boundary |> st_transform(4326),
+    color = "#2b2b2b", weight = 2,
+    fillOpacity = 0.1, 
+    fillColor = "gray"
+  ) |>
+  
+  # Metro Lines 
+  addCircleMarkers(
+      data = df_metro, 
+      color = "orange", 
+      radius = 4,
+      stroke = FALSE,
+      fillOpacity = 0.7,
+      popup = ~paste0("<b>", NOMBRE, "</b><br>Linea: ", LINEA)
+    ) |>
+  
+  # Metrobus
+  addCircleMarkers(
+      data = df_metrobus, 
+      color = "red",
+      radius = 4,
+      stroke = FALSE,
+      fillOpacity = 0.7,
+      popup = ~paste0("<b>", NOMBRE, "</b><br>Linea: ", LINEA)
+    )
+
+
+map_mob 
+
+
+```
+
 
