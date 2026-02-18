@@ -7,7 +7,7 @@ page-layout: article
 
 # Urban Mobility 
 
-In the present article, we understand as Urban Mobility the join infrastructure in terms of public transportation thats is available in the city in order to understand how this blueprints interacts with the populated area of the city as well as strategic places in order to understan how people can move between places using uniquely this transportation infrastructure. 
+In the present article, we understand as Urban Mobility the join infrastructure in terms of public transportation thats is available in the city in order to understand how this blueprints interacts with the populated area of the city as well as strategic places in order to understand how people can move between places using uniquely this transportation infrastructure. 
 
 ```{r, echo = FALSE, warning=FALSE}
 
@@ -61,7 +61,11 @@ SHP_FILE_STATION_TROLEBUS = "/ste_shp/ste_trolebus_shp/STE_Trolebus_Paradas.shp"
 
 **Problem Statement**:
 
-Given a Streets shapefile and a starting point, construct an algorithm that calculates the isochrone in walking or biking distance for a given time and average speed. 
+Mexico City is one of the most populous metropolitan areas in the world. As the political and economic capital of Mexico, it has been the centre of commerce and resource distribution since its foundation. Millions of people work and live here, so it is important to ask the following questions:
+
+  - Is the transport infrastructure accessible to the whole city?
+  - Is the supply of public transport sufficient to meet demand?
+  - What are the expectations for a demand shock and simulation?
 
 
 ## Data Preparation 
@@ -86,7 +90,6 @@ df_metrobus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METROBUS))
 #df_trolebus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_TROLEBUS))
 
 
-
 ## Transformations 
 df_metro <- st_zm(df_metro, drop = TRUE, what = "ZM")
 df_metro <- st_transform(df_metro, 4326)
@@ -96,6 +99,17 @@ df_metrobus <- st_transform(df_metrobus, 4326)
 
 
 ```
+
+
+```{r}
+
+
+
+```
+
+
+
+
 ```{r}
 
 
