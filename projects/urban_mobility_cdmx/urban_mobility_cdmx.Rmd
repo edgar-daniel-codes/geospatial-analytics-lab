@@ -60,7 +60,7 @@ SHP_FILE_LINES_METRO = "/stcmetro_shp/STC_Metro_lineas_utm14n.shp"
 
 
 # Rout files 
-
+METRO_DEMAND_FILE <- "/afluenciastc_desglosado_01_2026.csv"
 
 
 ```
@@ -399,48 +399,79 @@ df_heat <- df_mzna_cen |>
     lat = st_coordinates(geometry)[, 2]
   ) |>
   st_drop_geometry() |>
-  filter(is.finite(min_dist))          # drop NA / Inf rows
+  filter(is.finite(min_dist))         
 
  
-# Define palette mapped to min_dist
-pal <- colorNumeric(
-  palette = "YlOrRd",
-  domain  = df_mzna_cen$min_dist,
-  na.color = "grey"
+pal <- colorBin(
+  "inferno",
+  df_mzna_cen$min_dist,
+  bins = 10,
+  pretty = TRUE,
+  na.color = "darkred",
+  alpha = FALSE,
+  reverse = FALSE,
+  right = FALSE
 )
 
-# Final map for CDMX isochrone coverage 
+
 leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
+  setView(lng = -99.1332, lat = 19.4326, zoom = 11) |>
   addProviderTiles(providers$CartoDB.PositronNoLabels) |>
-  
+
   # CDMX boundary
   addPolygons(
-    data = df_boundary |> st_transform(4326),
-    color = "#2b2b2b", weight = 2,
-    fillOpacity = 0.1, 
-    fillColor = "gray"
+    data        = df_boundary |> st_transform(4326),
+    color       = "#2b2b2b",
+    weight      = 2,
+    fillOpacity = 0.1,
+    fillColor   = "gray"
   ) |>
 
-  # MZNA Layers
-  addHeatmap(
-    data      = df_heat,
-    lng       = ~lon,
-    lat       = ~lat,
-    intensity = ~min_dist,      # drives the colour/intensity
-    blur      = 10,             # smoothing radius in px
-    radius    = 30,             # point radius in px
-    max       = max(df_heat$min_dist)
+  # MZNA layer
+  addPolygons(
+    data        = df_mzna_cen |> st_transform(4326),
+    color       = "white",
+    weight      = 0,
+    fillOpacity = 1,
+    fillColor   = ~pal(min_dist)
   ) |>
-  
-  # Add Legend 
   addLegend(
     position = "bottomright",
     pal      = pal,
     values   = df_mzna_cen$min_dist,
     title    = "Min distance (m)",
-    na.label = "NA"
+    na.label = ">12.5Km"
   )
 
+  
+```
+  
+  
+## Daily demand 
+
+Lets study the daily demand of each station in order to understan mobility demand and patters inside the city. 
+
+```{r}
+
+df_metro_demand <- read_csv(paste0(RAW_DATA, METRO_DEMAND_FILE))
+  
+library(ggplot2)
+
+df_metro_demand |>
+  group_by(fecha) |>
+  summarise(total = sum(afluencia)) |>
+  arrange(fecha) |>
+  mutate(rolling_avg = zoo::rollmean(total, k = 7, fill = NA, align = "right")) |>
+  ggplot(aes(x = fecha)) +
+  geom_point(aes(y = total), alpha = 0.2, size = 1, color = "gray") +
+  geom_line(aes(y = rolling_avg), color = "darkblue", linewidth = 1) +
+  labs(
+    title    = "Metro Daily Demand",
+    subtitle = "7-day rolling average",
+    x        = "Date",
+    y        = "Total passengers"
+  ) +
+  theme_minimal()
   
 ```
   
