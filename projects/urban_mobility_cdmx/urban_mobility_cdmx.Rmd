@@ -18,6 +18,8 @@ library(dplyr)
 library(leaflet)
 library(here)
 library(sf)
+library(osrm)
+library(leaflet.extras)
 
 
 # Ensure chunks use project root
@@ -29,12 +31,16 @@ SAMPLE_DATA <- here("data", "sample")
 CODE <- here("lib")
 
 
+source(paste0(CODE, "/distance_utils.R"))
+
+
 ### Parameters  
 
 # City boundaries 
 CITY_SHP_DIR <- here("data", "raw", "marco_geo_2020")
 SHP_DIRECTORY <- "/09_ciudaddemexico/conjunto_de_datos/"
-SHP_FILE_C <- "09ent.shp"
+SHP_FILE_C <- "09m.shp"
+SHP_FILE_B <- "09ent.shp"
 CRS_MX <- 32614
 
 
@@ -49,7 +55,8 @@ SHP_FILE_STATION_TROLEBUS = "/ste_shp/ste_trolebus_shp/STE_Trolebus_Paradas.shp"
 
 
 # Line Files 
-
+SHP_FILE_LINES_METROBUS = "/mb_shp/Metrobus_lineas.shp"
+SHP_FILE_LINES_METRO = "/stcmetro_shp/STC_Metro_lineas_utm14n.shp"
 
 
 # Rout files 
@@ -78,24 +85,97 @@ The following approach was used to prepare the data: Using INEGI's 2020 Geostati
 ### Data ---------------------------------------------------------------------
 
 ## City file 
-df_boundary = st_read(paste0(CITY_SHP_DIR, SHP_DIRECTORY, SHP_FILE_C))
+df_boundary = st_read(paste0(CITY_SHP_DIR, SHP_DIRECTORY, SHP_FILE_B))
 
 ## Read file data 
-df_metro <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METRO))
-df_metrobus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METROBUS))
-#df_ecobici <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_ECOBICI))
-#df_rtp <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_RTP))
-#df_cablebus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_CABLEBUS))
-#df_trenl <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_TRENL))
-#df_trolebus <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_TROLEBUS))
+
+# Stations 
+df_metro_s<- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METRO))
+df_metrobus_s <- st_read(paste0(RAW_DATA,SHP_FILE_STATION_METROBUS))
+
+# Lines 
+df_metro_l<- st_read(paste0(RAW_DATA,SHP_FILE_LINES_METRO))
+df_metrobus_l <- st_read(paste0(RAW_DATA,SHP_FILE_LINES_METROBUS))
+
+# Isochrones 
+iso_all_metro <- st_read(paste0(RAW_DATA, "/iso_10m_metro.geojson"))
+iso_all_metrobus <- st_read(paste0(RAW_DATA, "/iso_10m_metrobus.geojson"))
 
 
 ## Transformations 
-df_metro <- st_zm(df_metro, drop = TRUE, what = "ZM")
+df_metro_s <- st_zm(df_metro_s, drop = TRUE, what = "ZM")
+df_metro_s <- st_transform(df_metro_s, 4326)
+df_metrobus_s <- st_zm(df_metrobus_s, drop = TRUE, what = "ZM")
+df_metrobus_s <- st_transform(df_metrobus_s, 4326)
+
+df_metro_l <- st_zm(df_metro_l, drop = TRUE, what = "ZM")
+df_metro_l <- st_transform(df_metro_l, 4326)
+df_metrobus_l <- st_zm(df_metrobus_l, drop = TRUE, what = "ZM")
+df_metrobus_l <- st_transform(df_metrobus_l, 4326)
+
+
+# Read MZA city data 
+df_mznas <- st_read(paste0(CITY_SHP_DIR,SHP_DIRECTORY , SHP_FILE_C))
+
+
+
+```
+
+```{r}
+
+# Ensure we are considering foot velocities 
+options(osrm.profile = "foot")
+
+
+## Metro 
+
+# Ensure CRS is correct
 df_metro <- st_transform(df_metro, 4326)
-df_metrobus <- st_zm(df_metrobus, drop = TRUE, what = "ZM")
-df_metrobus <- st_transform(df_metrobus, 4326)
 
+# If your server supports walking
+options(osrm.profile = "foot")
+
+iso_list <- lapply(
+  seq_len(nrow(df_metro)),
+  function(i) {
+    osrmIsochrone(
+      loc = df_metro[i, ],
+      breaks = c(10)
+    )
+  }
+)
+
+# Combine all isochrones into one sf object
+iso_all_metro <- st_union(st_make_valid(do.call(rbind, iso_list)))
+
+
+```
+
+```{r}
+
+# Ensure we are considering foot velocities 
+options(osrm.profile = "foot")
+
+
+## Metro 
+
+iso_list_mb <- vector("list", nrow(df_metrobus))
+
+for (i in seq_len(nrow(df_metrobus))) {
+  iso_list_mb[[i]] <- osrmIsochrone(loc = df_metrobus[i, ], breaks = 10)
+  iso_list_mb[[i]]$CVE_EST <- df_metrobus$CVE_EST[i]
+  Sys.sleep(0.2)  # small delay
+}
+
+iso_all_metrobus <- do.call(rbind, iso_list_mb)
+
+# Combine all isochrones into one sf object
+sf_use_s2(FALSE)
+
+iso_all_metro_m <- st_transform(iso_all_metrobus, 3857) |> st_make_valid()
+iso_union_m     <- st_union(iso_all_metro_m)
+
+iso_all_metrobus <- st_transform(st_sfc(iso_union_m, crs = 3857), 4326) |> st_sf()
 
 
 ```
@@ -103,6 +183,70 @@ df_metrobus <- st_transform(df_metrobus, 4326)
 
 ```{r}
 
+iso_all_metro |>
+  st_write(paste0(RAW_DATA, "/iso_10m_metro.geojson"),
+           delete_dsn = TRUE)
+
+iso_all_metrobus |>
+  st_write(paste0(RAW_DATA, "/iso_10m_metrobus.geojson"),
+           delete_dsn = TRUE)
+
+
+```
+Now we unify the isochrones into a same SHP object in order to make easier the intersection from covered MZNA units from the metro and metrobus stations. 
+
+```{r}
+
+# Merge both isochorne objects 
+iso_metro_net <- st_union(iso_all_metrobus,iso_all_metro) |>
+   st_transform(
+     crs_iso <- st_crs(st_geometry(df_mznas))
+                )
+
+
+# Merge Stations 
+
+
+## Get the containing MZAS 
+
+# Centroids for MZNA 
+df_mzna_cen <- df_mznas |> 
+  select(CVEGEO) |> 
+  mutate(
+    centroid = st_centroid(geometry),
+    coords = centroid |> st_coordinates(), 
+    x = coords[,1], 
+    y = coords[,2]  
+    )
+
+
+# Centroid filtering 
+
+df_mzna_inside <- df_mzna_cen[
+  lengths(st_within(df_mzna_cen$centroid, st_geometry(iso_metro_net))) > 0,
+]
+
+
+
+## Get the distance from MZNA units to nearest statins 
+
+
+# Merge Metrobus and Metro Station 
+df_metrored_s <-  bind_rows(
+  df_metro_s |> select(SISTEMA, NOMBRE, LINEA),
+  df_metrobus_s |> select(SISTEMA, NOMBRE, LINEA)
+) |> 
+st_transform(st_crs(st_geometry(df_mznas))) |> 
+  mutate(
+    centroid = st_centroid(geometry) ,
+    coords = centroid |> st_coordinates(), 
+    x = coords[,1], 
+    y = coords[,2]  
+  )
+
+
+
+
 
 
 ```
@@ -111,13 +255,12 @@ df_metrobus <- st_transform(df_metrobus, 4326)
 
 
 ```{r}
-
 
 
 # Final map for CDMX isochrone coverage 
 map_mob <- leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
   addProviderTiles(providers$CartoDB.PositronNoLabels) |>
-
+  
   # CDMX boundary
   addPolygons(
     data = df_boundary |> st_transform(4326),
@@ -126,9 +269,26 @@ map_mob <- leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |
     fillColor = "gray"
   ) |>
   
+
   # Metro Lines 
+  addPolylines(
+      data = df_metro_l |> st_transform(4326), 
+      color = "orange", 
+      opacity = 0.7,
+      popup = ~paste0("<b>", RUTA, "</b><br>Linea: ", LINEA)
+    ) |>
+  
+  # Metrobus Lines 
+  addPolylines(
+      data = df_metrobus_l |> st_transform(4326), 
+      color = "red", 
+      opacity = 0.7,
+      popup = ~paste0("<b>", RUTA, "</b><br>Linea: ", LINEA)
+    ) |>
+  
+  # Metro Stations  
   addCircleMarkers(
-      data = df_metro, 
+      data = df_metro_s |> st_transform(4326), 
       color = "orange", 
       radius = 4,
       stroke = FALSE,
@@ -138,18 +298,150 @@ map_mob <- leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |
   
   # Metrobus
   addCircleMarkers(
-      data = df_metrobus, 
+      data = df_metrobus_s |> st_transform(4326), 
       color = "red",
       radius = 4,
       stroke = FALSE,
       fillOpacity = 0.7,
       popup = ~paste0("<b>", NOMBRE, "</b><br>Linea: ", LINEA)
-    )
+    ) |>
+  
+  # Isochrones
+  addPolygons(
+    data = iso_all_metro |> st_transform(4326),
+    color = "orange", weight = 2,
+    fillOpacity = 0.25, 
+    fillColor = "orange"
+  ) |>
 
+  # Isochrones
+  addPolygons(
+    data = iso_all_metrobus |> st_transform(4326),
+    color = "salmon", weight = 2,
+    fillOpacity = 0.25, 
+    fillColor = "salmon"
+  ) |>
 
-map_mob 
+    addPolygons(
+    data = df_mzna_inside |> st_transform(4326),
+    color = "lightgreen", weight = 0.2,
+    fillOpacity = 0.1, 
+    fillColor = "gray"
+  )
 
+map_mob
 
 ```
 
+
+
+
+
+
+```{r}
+
+
+# Final map for CDMX isochrone coverage 
+leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
+  addProviderTiles(providers$CartoDB.PositronNoLabels) |>
+  
+  # CDMX boundary
+  addPolygons(
+    data = df_boundary |> st_transform(4326),
+    color = "#2b2b2b", weight = 2,
+    fillOpacity = 0.1, 
+    fillColor = "gray"
+  ) |>
+
+  # MZNA Layers
+  addPolygons(
+    data = df_mzna_inside |> st_transform(4326),
+    color = "darkgreen", weight = 0.2,
+    fillOpacity = 0.6, 
+    fillColor = "green"
+  ) 
+```  
+  
+  
+## Distance to the nearest ststion 
+
+Other important aspect of mobility is not only the reach withing n-minute radius, but for a more comprehensive view, understand the distance from each point in the habitated city to the nearest station. 
+
+
+
+```{r}
+dist_df <- min_manhattan_to_df2(
+  df1 = df_mzna_cen |> drop_na() ,
+  df2 = df_metrored_s |> drop_na() ,
+  id_col = "CVEGEO",
+  x_col_df1 = "x",
+  y_col_df1 = "y",
+  x_col_df2 = "x",
+  y_col_df2 = "y",
+  min_buffer = 1200,
+  max_buffer = 12500
+)
+```
+
+
+```{r}
+
+# Merge with MZNA polygonal data 
+df_mzna_cen <- df_mzna_cen |> 
+    left_join(dist_df |> rename(CVEGEO = id_col)
+              ,by = "CVEGEO")
+
+df_heat <- df_mzna_cen |>
+  st_transform(4326) |>
+  st_centroid() |>
+  mutate(
+    lon = st_coordinates(geometry)[, 1],
+    lat = st_coordinates(geometry)[, 2]
+  ) |>
+  st_drop_geometry() |>
+  filter(is.finite(min_dist))          # drop NA / Inf rows
+
+ 
+# Define palette mapped to min_dist
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain  = df_mzna_cen$min_dist,
+  na.color = "grey"
+)
+
+# Final map for CDMX isochrone coverage 
+leaflet(options = leafletOptions(minZoom = 9, zoomControl = FALSE)) |>
+  addProviderTiles(providers$CartoDB.PositronNoLabels) |>
+  
+  # CDMX boundary
+  addPolygons(
+    data = df_boundary |> st_transform(4326),
+    color = "#2b2b2b", weight = 2,
+    fillOpacity = 0.1, 
+    fillColor = "gray"
+  ) |>
+
+  # MZNA Layers
+  addHeatmap(
+    data      = df_heat,
+    lng       = ~lon,
+    lat       = ~lat,
+    intensity = ~min_dist,      # drives the colour/intensity
+    blur      = 10,             # smoothing radius in px
+    radius    = 30,             # point radius in px
+    max       = max(df_heat$min_dist)
+  ) |>
+  
+  # Add Legend 
+  addLegend(
+    position = "bottomright",
+    pal      = pal,
+    values   = df_mzna_cen$min_dist,
+    title    = "Min distance (m)",
+    na.label = "NA"
+  )
+
+  
+```
+  
 
